@@ -35,6 +35,7 @@ export default function MatchesPage() {
   const [showForm, setShowForm] = useState(false);
   const [showGenerate, setShowGenerate] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [editingMatch, setEditingMatch] = useState<Match | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -49,8 +50,12 @@ export default function MatchesPage() {
   });
 
   const [generateData, setGenerateData] = useState({
-    defaultVenue: '',
+    venues: 'A, B, C',
     startDate: '',
+    startTime: '09:00',
+    matchDuration: 15,
+    breakBetweenMatches: 5,
+    restBetweenGames: 2,
   });
 
   useEffect(() => {
@@ -72,12 +77,44 @@ export default function MatchesPage() {
       setGroups(Array.isArray(groupsData) ? groupsData : []);
     } catch (error) {
       console.error('Failed to fetch data:', error);
-      setMatches([]);
-      setTeams([]);
-      setGroups([]);
     } finally {
       setLoading(false);
     }
+  };
+
+  const resetForm = () => {
+    setFormData({ homeTeam: '', awayTeam: '', groupId: '', round: 'group', venue: '', matchDate: '', matchTime: '' });
+    setEditingMatch(null);
+  };
+
+  const handleAddNew = () => {
+    resetForm();
+    setShowForm(true);
+    setShowGenerate(false);
+    setError('');
+    setSuccess('');
+  };
+
+  const handleEdit = (match: Match) => {
+    setEditingMatch(match);
+    setFormData({
+      homeTeam: match.homeTeam?._id || '',
+      awayTeam: match.awayTeam?._id || '',
+      groupId: match.groupId?._id || '',
+      round: match.round,
+      venue: match.venue,
+      matchDate: match.matchDate.split('T')[0],
+      matchTime: match.matchTime,
+    });
+    setShowForm(true);
+    setShowGenerate(false);
+    setError('');
+    setSuccess('');
+  };
+
+  const handleCloseForm = () => {
+    setShowForm(false);
+    resetForm();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -86,25 +123,18 @@ export default function MatchesPage() {
     setSuccess('');
 
     try {
-      const res = await fetch('/api/matches', {
-        method: 'POST',
+      const url = editingMatch ? `/api/matches/${editingMatch._id}` : '/api/matches';
+      const method = editingMatch ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
       });
 
-      if (!res.ok) throw new Error('Failed to create match');
-
-      setSuccess('試合を作成しました');
-      setShowForm(false);
-      setFormData({
-        homeTeam: '',
-        awayTeam: '',
-        groupId: '',
-        round: 'group',
-        venue: '',
-        matchDate: '',
-        matchTime: '',
-      });
+      if (!res.ok) throw new Error('Failed to save match');
+      setSuccess(editingMatch ? 'Match updated' : 'Match created');
+      handleCloseForm();
       fetchData();
     } catch (error: any) {
       setError(error.message);
@@ -126,10 +156,11 @@ export default function MatchesPage() {
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || 'Failed to generate matches');
+        throw new Error(data.error || 'Failed to generate');
       }
 
-      setSuccess('グループステージの試合を自動生成しました');
+      const result = await res.json();
+      setSuccess(`Generated ${result.length} matches`);
       setShowGenerate(false);
       fetchData();
     } catch (error: any) {
@@ -139,308 +170,249 @@ export default function MatchesPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('この試合を削除しますか？')) return;
-
+  const handleCancel = async (id: string) => {
+    if (!confirm('Cancel this match?')) return;
     try {
-      const res = await fetch(`/api/matches/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed to delete');
-      setSuccess('試合を削除しました');
+      const res = await fetch(`/api/matches/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'cancelled' }),
+      });
+      if (!res.ok) throw new Error('Failed');
+      setSuccess('Match cancelled');
       fetchData();
     } catch (error) {
-      setError('削除に失敗しました');
+      setError('Failed to cancel');
     }
   };
 
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('ja-JP', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
+  const handleDelete = async (id: string) => {
+    if (!confirm('Delete this match?')) return;
+    try {
+      await fetch(`/api/matches/${id}`, { method: 'DELETE' });
+      setSuccess('Match deleted');
+      fetchData();
+    } catch (error) {
+      setError('Failed to delete');
+    }
   };
 
+  const formatDate = (dateStr: string) => new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
   const getRoundLabel = (round: string) => {
-    const labels: Record<string, string> = {
-      group: 'グループ',
-      round16: 'R16',
-      quarter: '準々',
-      semi: '準決',
-      third: '3位',
-      final: '決勝',
-    };
+    const labels: Record<string, string> = { group: 'Group', round32: 'R32', round16: 'R16', quarter: 'QF', semi: 'SF', third: '3rd', final: 'Final' };
     return labels[round] || round;
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-800"></div>
-      </div>
-    );
-  }
+  const getStatusBadge = (status: string) => {
+    const styles: Record<string, string> = { scheduled: 'bg-blue-100 text-blue-800', live: 'bg-red-100 text-red-800', completed: 'bg-green-100 text-green-800', cancelled: 'bg-gray-100 text-gray-800' };
+    return <span className={`px-2 py-1 rounded text-xs font-medium ${styles[status]}`}>{status}</span>;
+  };
+
+  if (loading) return <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-800"></div></div>;
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center flex-wrap gap-2">
-        <h2 className="text-2xl font-bold text-gray-800">試合管理</h2>
-        <div className="flex gap-2">
-          <button
-            onClick={() => { setShowGenerate(!showGenerate); setShowForm(false); }}
-            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition"
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-800">Match Management</h2>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <button 
+            onClick={() => { setShowGenerate(!showGenerate); setShowForm(false); }} 
+            className="flex-1 sm:flex-none bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 text-sm"
           >
-            ⚡ 自動生成
+            ⚡ Auto
           </button>
-          <button
-            onClick={() => { setShowForm(!showForm); setShowGenerate(false); }}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
+          <button 
+            onClick={handleAddNew}
+            className="flex-1 sm:flex-none bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 text-sm"
           >
-            + 試合追加
+            + Add Match
           </button>
         </div>
       </div>
 
-      {/* Messages */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-          {error}
-        </div>
-      )}
-      {success && (
-        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg">
-          {success}
-        </div>
-      )}
+      {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</div>}
+      {success && <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">{success}</div>}
 
-      {/* Auto Generate Form */}
       {showGenerate && (
-        <form onSubmit={handleGenerate} className="bg-green-50 border border-green-200 rounded-xl p-6">
-          <h3 className="text-lg font-bold mb-4">⚡ グループステージ自動生成</h3>
-          <p className="text-sm text-gray-600 mb-4">
-            既存のグループ分けに基づいて、総当たり戦の試合を自動生成します。
-            既存のグループステージ試合は削除されます。
-          </p>
-          <div className="grid md:grid-cols-2 gap-4">
+        <form onSubmit={handleGenerate} className="bg-green-50 border border-green-200 rounded-xl p-4">
+          <h3 className="text-lg font-bold mb-3">⚡ Auto Generate Group Stage</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                会場名
-              </label>
-              <input
-                type="text"
-                value={generateData.defaultVenue}
-                onChange={(e) => setGenerateData({ ...generateData, defaultVenue: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                placeholder="例: 中央グラウンド"
-                required
-              />
+              <label className="block text-sm font-medium text-gray-700 mb-1">Venues (comma separated)</label>
+              <input type="text" value={generateData.venues} onChange={(e) => setGenerateData({ ...generateData, venues: e.target.value })} className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="A, B, C" required />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                開始日
-              </label>
-              <input
-                type="date"
-                value={generateData.startDate}
-                onChange={(e) => setGenerateData({ ...generateData, startDate: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                required
-              />
+              <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+              <input type="date" value={generateData.startDate} onChange={(e) => setGenerateData({ ...generateData, startDate: e.target.value })} className="w-full border rounded-lg px-3 py-2 text-sm" required />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Start Time</label>
+              <input type="time" value={generateData.startTime} onChange={(e) => setGenerateData({ ...generateData, startTime: e.target.value })} className="w-full border rounded-lg px-3 py-2 text-sm" required />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Match Duration</label>
+              <select value={generateData.matchDuration} onChange={(e) => setGenerateData({ ...generateData, matchDuration: Number(e.target.value) })} className="w-full border rounded-lg px-3 py-2 text-sm">
+                {[10, 12, 15, 20, 25, 30].map(n => <option key={n} value={n}>{n} min</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Break Between</label>
+              <select value={generateData.breakBetweenMatches} onChange={(e) => setGenerateData({ ...generateData, breakBetweenMatches: Number(e.target.value) })} className="w-full border rounded-lg px-3 py-2 text-sm">
+                {[0, 5, 10, 15].map(n => <option key={n} value={n}>{n} min</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Rest Between</label>
+              <select value={generateData.restBetweenGames} onChange={(e) => setGenerateData({ ...generateData, restBetweenGames: Number(e.target.value) })} className="w-full border rounded-lg px-3 py-2 text-sm">
+                {[1, 2, 3, 4].map(n => <option key={n} value={n}>{n} matches</option>)}
+              </select>
             </div>
           </div>
-          <button
-            type="submit"
-            disabled={generating || groups.length === 0}
-            className="mt-4 bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition disabled:opacity-50"
-          >
-            {generating ? '生成中...' : '生成する'}
-          </button>
-          {groups.length === 0 && (
-            <p className="mt-2 text-sm text-red-500">
-              ※ 先にグループ抽選を行ってください
-            </p>
-          )}
+          <div className="mt-3 flex gap-2">
+            <button type="submit" disabled={generating || groups.length === 0} className="bg-green-600 text-white px-4 py-2 rounded-lg disabled:opacity-50 text-sm">{generating ? 'Generating...' : 'Generate'}</button>
+            <button type="button" onClick={() => setShowGenerate(false)} className="bg-gray-300 px-4 py-2 rounded-lg text-sm">Cancel</button>
+          </div>
+          {groups.length === 0 && <p className="mt-2 text-sm text-red-500">Please draw groups first</p>}
         </form>
       )}
 
-      {/* Manual Add Form */}
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow p-6">
-          <h3 className="text-lg font-bold mb-4">試合を手動追加</h3>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow p-4">
+          <h3 className="text-lg font-bold mb-3">{editingMatch ? 'Edit Match' : 'Add Match'}</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                ホームチーム
-              </label>
-              <select
-                value={formData.homeTeam}
-                onChange={(e) => setFormData({ ...formData, homeTeam: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                required
-              >
-                <option value="">選択...</option>
-                {teams.map((team) => (
-                  <option key={team._id} value={team._id}>{team.name}</option>
-                ))}
+              <label className="block text-sm font-medium mb-1">Home Team</label>
+              <select value={formData.homeTeam} onChange={(e) => setFormData({ ...formData, homeTeam: e.target.value })} className="w-full border rounded-lg px-3 py-2 text-sm" required>
+                <option value="">Select...</option>
+                {teams.map(t => <option key={t._id} value={t._id}>{t.name}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                アウェイチーム
-              </label>
-              <select
-                value={formData.awayTeam}
-                onChange={(e) => setFormData({ ...formData, awayTeam: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                required
-              >
-                <option value="">選択...</option>
-                {teams.map((team) => (
-                  <option key={team._id} value={team._id}>{team.name}</option>
-                ))}
+              <label className="block text-sm font-medium mb-1">Away Team</label>
+              <select value={formData.awayTeam} onChange={(e) => setFormData({ ...formData, awayTeam: e.target.value })} className="w-full border rounded-lg px-3 py-2 text-sm" required>
+                <option value="">Select...</option>
+                {teams.map(t => <option key={t._id} value={t._id}>{t.name}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                ラウンド
-              </label>
-              <select
-                value={formData.round}
-                onChange={(e) => setFormData({ ...formData, round: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2"
-              >
-                <option value="group">グループステージ</option>
-                <option value="round16">ラウンド16</option>
-                <option value="quarter">準々決勝</option>
-                <option value="semi">準決勝</option>
-                <option value="third">3位決定戦</option>
-                <option value="final">決勝</option>
+              <label className="block text-sm font-medium mb-1">Round</label>
+              <select value={formData.round} onChange={(e) => setFormData({ ...formData, round: e.target.value })} className="w-full border rounded-lg px-3 py-2 text-sm">
+                <option value="group">Group Stage</option>
+                <option value="round32">Round of 32</option>
+                <option value="round16">Round of 16</option>
+                <option value="quarter">Quarter Final</option>
+                <option value="semi">Semi Final</option>
+                <option value="third">3rd Place</option>
+                <option value="final">Final</option>
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                会場
-              </label>
-              <input
-                type="text"
-                value={formData.venue}
-                onChange={(e) => setFormData({ ...formData, venue: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                placeholder="例: Aグラウンド"
-                required
-              />
+              <label className="block text-sm font-medium mb-1">Venue</label>
+              <input type="text" value={formData.venue} onChange={(e) => setFormData({ ...formData, venue: e.target.value })} className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Field A" required />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                日付
-              </label>
-              <input
-                type="date"
-                value={formData.matchDate}
-                onChange={(e) => setFormData({ ...formData, matchDate: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                required
-              />
+              <label className="block text-sm font-medium mb-1">Date</label>
+              <input type="date" value={formData.matchDate} onChange={(e) => setFormData({ ...formData, matchDate: e.target.value })} className="w-full border rounded-lg px-3 py-2 text-sm" required />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                時間
-              </label>
-              <input
-                type="time"
-                value={formData.matchTime}
-                onChange={(e) => setFormData({ ...formData, matchTime: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                required
-              />
+              <label className="block text-sm font-medium mb-1">Time</label>
+              <input type="time" value={formData.matchTime} onChange={(e) => setFormData({ ...formData, matchTime: e.target.value })} className="w-full border rounded-lg px-3 py-2 text-sm" required />
             </div>
           </div>
-          <button
-            type="submit"
-            className="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition"
-          >
-            登録
-          </button>
+          <div className="mt-3 flex gap-2">
+            <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm">{editingMatch ? 'Update' : 'Create'}</button>
+            <button type="button" onClick={handleCloseForm} className="bg-gray-300 px-4 py-2 rounded-lg text-sm">Cancel</button>
+          </div>
         </form>
       )}
 
-      {/* Matches List */}
-      <div className="bg-white rounded-xl shadow overflow-hidden">
+      {/* Mobile Card View */}
+      <div className="block sm:hidden space-y-3">
+        {matches.length === 0 ? (
+          <div className="bg-white rounded-xl p-6 text-center text-gray-500">No matches yet</div>
+        ) : matches.map((match) => (
+          <div key={match._id} className={`bg-white rounded-xl shadow p-4 ${match.status === 'cancelled' ? 'opacity-50' : ''}`}>
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-xs text-gray-500">{formatDate(match.matchDate)} {match.matchTime}</span>
+              {getStatusBadge(match.status)}
+            </div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="font-medium">{match.homeTeam?.shortName || 'TBD'}</span>
+              <span className="text-gray-400 mx-2">
+                {match.status === 'completed' || match.status === 'live' 
+                  ? <span className="font-bold">{match.homeScore} - {match.awayScore}</span> 
+                  : 'vs'}
+              </span>
+              <span className="font-medium">{match.awayTeam?.shortName || 'TBD'}</span>
+            </div>
+            <div className="flex justify-between items-center text-xs text-gray-500">
+              <span>{getRoundLabel(match.round)} | {match.venue}</span>
+              <div className="space-x-2">
+                {match.status === 'scheduled' && (
+                  <>
+                    <button onClick={() => handleEdit(match)} className="text-blue-600">Edit</button>
+                    <button onClick={() => handleCancel(match._id)} className="text-orange-600">Cancel</button>
+                  </>
+                )}
+                <button onClick={() => handleDelete(match._id)} className="text-red-600">Delete</button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop Table View */}
+      <div className="hidden sm:block bg-white rounded-xl shadow overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  日時
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  対戦
-                </th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">
-                  スコア
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  ラウンド
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  会場
-                </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                  操作
-                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date/Time</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Match</th>
+                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Score</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Round</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Venue</th>
+                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
+            <tbody className="divide-y">
               {matches.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
-                    試合がまだ登録されていません
+                <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-500">No matches yet</td></tr>
+              ) : matches.map((match) => (
+                <tr key={match._id} className={`hover:bg-gray-50 ${match.status === 'cancelled' ? 'opacity-50' : ''}`}>
+                  <td className="px-4 py-3">
+                    <div className="text-sm">{formatDate(match.matchDate)}</div>
+                    <div className="text-xs text-gray-500">{match.matchTime}</div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="font-medium">{match.homeTeam?.shortName || 'TBD'}</span>
+                    <span className="text-gray-400 mx-2">vs</span>
+                    <span className="font-medium">{match.awayTeam?.shortName || 'TBD'}</span>
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    {match.status === 'completed' || match.status === 'live' ? <span className="font-bold">{match.homeScore} - {match.awayScore}</span> : <span className="text-gray-400">-</span>}
+                  </td>
+                  <td className="px-4 py-3"><span className="bg-gray-100 px-2 py-1 rounded text-xs">{getRoundLabel(match.round)}</span></td>
+                  <td className="px-4 py-3 text-sm">{match.venue}</td>
+                  <td className="px-4 py-3 text-center">{getStatusBadge(match.status)}</td>
+                  <td className="px-4 py-3 text-right space-x-2">
+                    {match.status === 'scheduled' && (
+                      <>
+                        <button onClick={() => handleEdit(match)} className="text-blue-600 hover:text-blue-800 text-sm">Edit</button>
+                        <button onClick={() => handleCancel(match._id)} className="text-orange-600 hover:text-orange-800 text-sm">Cancel</button>
+                      </>
+                    )}
+                    <button onClick={() => handleDelete(match._id)} className="text-red-600 hover:text-red-800 text-sm">Delete</button>
                   </td>
                 </tr>
-              ) : (
-                matches.map((match) => (
-                  <tr key={match._id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3">
-                      <div className="text-sm">{formatDate(match.matchDate)}</div>
-                      <div className="text-xs text-gray-500">{match.matchTime}</div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="font-medium">{match.homeTeam?.shortName || 'TBD'}</span>
-                      <span className="text-gray-400 mx-2">vs</span>
-                      <span className="font-medium">{match.awayTeam?.shortName || 'TBD'}</span>
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      {match.status === 'completed' ? (
-                        <span className="font-bold">{match.homeScore} - {match.awayScore}</span>
-                      ) : (
-                        <span className="text-gray-400">- : -</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="bg-gray-100 px-2 py-1 rounded text-xs">
-                        {getRoundLabel(match.round)}
-                        {match.groupId && ` ${match.groupId.name}`}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{match.venue}</td>
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        onClick={() => handleDelete(match._id)}
-                        className="text-red-600 hover:text-red-800 text-sm"
-                      >
-                        削除
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
+              ))}
             </tbody>
           </table>
         </div>
       </div>
-
-      <div className="text-sm text-gray-500">
-        総試合数: {matches.length}
-      </div>
+      <div className="text-sm text-gray-500">Total: {matches.length} matches</div>
     </div>
   );
 }

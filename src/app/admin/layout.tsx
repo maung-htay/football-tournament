@@ -11,45 +11,38 @@ export default function AdminLayout({
   const pathname = usePathname();
 
   const navItems = [
-    { href: '/admin', label: 'ダッシュボード', icon: '🏠' },
-    { href: '/admin/teams', label: 'チーム管理', icon: '👥' },
-    { href: '/admin/groups', label: 'グループ抽選', icon: '🎲' },
-    { href: '/admin/matches', label: '試合管理', icon: '📅' },
-    { href: '/admin/scores', label: 'スコア入力', icon: '⚽' },
+    { href: '/admin', label: 'Dashboard', icon: '🏠' },
+    { href: '/admin/teams', label: 'Teams', icon: '👥' },
+    { href: '/admin/groups', label: 'Groups', icon: '🎲' },
+    { href: '/admin/matches', label: 'Matches', icon: '📅' },
+    { href: '/admin/scores', label: 'Scores', icon: '⚽' },
+    { href: '/admin/standings', label: 'Standings', icon: '📊' },
   ];
 
   return (
     <div className="min-h-screen bg-gray-100">
       {/* Header */}
       <header className="bg-gray-800 text-white shadow-lg">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex justify-between items-center">
-            <h1 className="text-xl font-bold">⚽ 管理者ページ</h1>
-            <Link
-              href="/"
-              className="text-gray-300 hover:text-white text-sm transition"
-            >
-              ← ユーザーページへ
-            </Link>
-          </div>
+        <div className="max-w-7xl mx-auto px-4 py-3 sm:py-4">
+          <h1 className="text-lg sm:text-xl font-bold">⚽ Admin Panel</h1>
         </div>
       </header>
 
       {/* Navigation */}
       <nav className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex space-x-1 overflow-x-auto py-2">
+        <div className="max-w-7xl mx-auto px-2 sm:px-4">
+          <div className="flex space-x-1 overflow-x-auto py-2 scrollbar-hide">
             {navItems.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition ${
+                className={`px-3 py-2 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap transition ${
                   pathname === item.href
                     ? 'bg-gray-800 text-white'
                     : 'text-gray-600 hover:bg-gray-100'
                 }`}
               >
-                {item.icon} {item.label}
+                <span className="hidden sm:inline">{item.icon} </span>{item.label}
               </Link>
             ))}
           </div>
@@ -57,7 +50,7 @@ export default function AdminLayout({
       </nav>
 
       {/* Content */}
-      <main className="max-w-7xl mx-auto px-4 py-6">{children}</main>
+      <main className="max-w-7xl mx-auto px-2 sm:px-4 py-4 sm:py-6">{children}</main>
     </div>
   );
 }

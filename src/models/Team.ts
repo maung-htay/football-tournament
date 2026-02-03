@@ -18,7 +18,7 @@ const TeamSchema = new Schema<ITeam>(
   {
     name: { type: String, required: true, unique: true },
     shortName: { type: String, required: true, maxlength: 5 },
-    logoUrl: { type: String },
+    logoUrl: { type: String, default: '' },
     groupId: { type: Schema.Types.ObjectId, ref: 'Group' },
     played: { type: Number, default: 0 },
     won: { type: Number, default: 0 },

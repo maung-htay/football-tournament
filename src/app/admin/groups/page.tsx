@@ -6,6 +6,7 @@ interface Team {
   _id: string;
   name: string;
   shortName: string;
+  logoUrl?: string;
 }
 
 interface Group {
@@ -16,13 +17,19 @@ interface Group {
 
 export default function GroupsPage() {
   const [groups, setGroups] = useState<Group[]>([]);
-  const [teams, setTeams] = useState<Team[]>([]);
+  const [allTeams, setAllTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
   const [drawing, setDrawing] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [groupCount, setGroupCount] = useState(4);
   const [teamsPerGroup, setTeamsPerGroup] = useState(4);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  
+  // Edit mode
+  const [editMode, setEditMode] = useState(false);
+  const [editingGroup, setEditingGroup] = useState<Group | null>(null);
+  const [selectedTeams, setSelectedTeams] = useState<string[]>([]);
 
   useEffect(() => {
     fetchData();
@@ -37,11 +44,11 @@ export default function GroupsPage() {
       const groupsData = await groupsRes.json();
       const teamsData = await teamsRes.json();
       setGroups(Array.isArray(groupsData) ? groupsData : []);
-      setTeams(Array.isArray(teamsData) ? teamsData : []);
+      setAllTeams(Array.isArray(teamsData) ? teamsData : []);
     } catch (error) {
       console.error('Failed to fetch data:', error);
       setGroups([]);
-      setTeams([]);
+      setAllTeams([]);
     } finally {
       setLoading(false);
     }
@@ -64,7 +71,7 @@ export default function GroupsPage() {
         throw new Error(data.error || 'Failed to draw groups');
       }
 
-      setSuccess('グループ抽選が完了しました！');
+      setSuccess('Group draw completed!');
       fetchData();
     } catch (error: any) {
       setError(error.message);
@@ -72,6 +79,83 @@ export default function GroupsPage() {
       setDrawing(false);
     }
   };
+
+  const handleReset = async () => {
+    if (!confirm('Reset all groups? This will remove all group assignments and delete related matches.')) return;
+    
+    setError('');
+    setSuccess('');
+    setResetting(true);
+
+    try {
+      const res = await fetch('/api/groups/reset', {
+        method: 'POST',
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to reset groups');
+      }
+
+      setSuccess('Groups reset successfully');
+      fetchData();
+    } catch (error: any) {
+      setError(error.message);
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  const handleEditGroup = (group: Group) => {
+    setEditingGroup(group);
+    setSelectedTeams(group.teams.map(t => t._id));
+    setEditMode(true);
+    setError('');
+    setSuccess('');
+  };
+
+  const handleSaveGroup = async () => {
+    if (!editingGroup) return;
+    
+    setError('');
+    try {
+      const res = await fetch(`/api/groups/${editingGroup._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teams: selectedTeams }),
+      });
+
+      if (!res.ok) throw new Error('Failed to update group');
+
+      setSuccess('Group updated successfully');
+      setEditMode(false);
+      setEditingGroup(null);
+      fetchData();
+    } catch (error: any) {
+      setError(error.message);
+    }
+  };
+
+  const toggleTeamSelection = (teamId: string) => {
+    setSelectedTeams(prev => 
+      prev.includes(teamId) 
+        ? prev.filter(id => id !== teamId)
+        : [...prev, teamId]
+    );
+  };
+
+  // Get teams not in any group (for editing)
+  const unassignedTeams = allTeams.filter(team => {
+    if (editingGroup) {
+      // Include teams from the group being edited
+      const inCurrentGroup = editingGroup.teams.some(t => t._id === team._id);
+      if (inCurrentGroup) return true;
+    }
+    // Check if team is in any other group
+    return !groups.some(g => 
+      g._id !== editingGroup?._id && g.teams.some(t => t._id === team._id)
+    );
+  });
 
   if (loading) {
     return (
@@ -83,7 +167,18 @@ export default function GroupsPage() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-gray-800">グループ抽選</h2>
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold text-gray-800">Group Draw</h2>
+        {groups.length > 0 && (
+          <button
+            onClick={handleReset}
+            disabled={resetting}
+            className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition disabled:opacity-50"
+          >
+            {resetting ? 'Resetting...' : '🗑️ Reset All Groups'}
+          </button>
+        )}
+      </div>
 
       {/* Messages */}
       {error && (
@@ -99,11 +194,11 @@ export default function GroupsPage() {
 
       {/* Draw Settings */}
       <div className="bg-white rounded-xl shadow p-6">
-        <h3 className="text-lg font-bold mb-4">🎲 抽選設定</h3>
+        <h3 className="text-lg font-bold mb-4">🎲 Draw Settings</h3>
         <div className="grid md:grid-cols-3 gap-4 items-end">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              グループ数
+              Number of Groups
             </label>
             <select
               value={groupCount}
@@ -111,13 +206,13 @@ export default function GroupsPage() {
               className="w-full border border-gray-300 rounded-lg px-3 py-2"
             >
               {[2, 3, 4, 5, 6, 7, 8].map((n) => (
-                <option key={n} value={n}>{n}グループ</option>
+                <option key={n} value={n}>{n} Groups</option>
               ))}
             </select>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              1グループあたりのチーム数
+              Teams per Group
             </label>
             <select
               value={teamsPerGroup}
@@ -125,35 +220,100 @@ export default function GroupsPage() {
               className="w-full border border-gray-300 rounded-lg px-3 py-2"
             >
               {[3, 4, 5, 6].map((n) => (
-                <option key={n} value={n}>{n}チーム</option>
+                <option key={n} value={n}>{n} Teams</option>
               ))}
             </select>
           </div>
           <button
             onClick={handleDraw}
-            disabled={drawing || teams.length < groupCount * teamsPerGroup}
+            disabled={drawing || allTeams.length < groupCount * teamsPerGroup}
             className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {drawing ? '抽選中...' : '🎲 抽選実行'}
+            {drawing ? 'Drawing...' : '🎲 Start Draw'}
           </button>
         </div>
         <p className="mt-3 text-sm text-gray-500">
-          必要チーム数: {groupCount * teamsPerGroup}チーム / 登録チーム数: {teams.length}チーム
-          {teams.length < groupCount * teamsPerGroup && (
+          Required: {groupCount * teamsPerGroup} teams / Registered: {allTeams.length} teams
+          {allTeams.length < groupCount * teamsPerGroup && (
             <span className="text-red-500 ml-2">
-              ※ チームが不足しています
+              ※ Not enough teams
             </span>
           )}
         </p>
       </div>
+
+      {/* Edit Group Modal */}
+      {editMode && editingGroup && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl p-6 max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
+            <h3 className="text-lg font-bold mb-4">Edit {editingGroup.name}</h3>
+            <p className="text-sm text-gray-500 mb-4">Select teams for this group:</p>
+            
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {unassignedTeams.map((team) => (
+                <label 
+                  key={team._id}
+                  className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition ${
+                    selectedTeams.includes(team._id) 
+                      ? 'bg-green-100 border-2 border-green-500' 
+                      : 'bg-gray-50 border-2 border-transparent hover:bg-gray-100'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedTeams.includes(team._id)}
+                    onChange={() => toggleTeamSelection(team._id)}
+                    className="w-5 h-5"
+                  />
+                  {team.logoUrl && (
+                    <img src={team.logoUrl} alt="" className="w-8 h-8 object-contain" />
+                  )}
+                  <div>
+                    <p className="font-medium">{team.shortName}</p>
+                    <p className="text-xs text-gray-500">{team.name}</p>
+                  </div>
+                </label>
+              ))}
+            </div>
+
+            <div className="mt-4 text-sm text-gray-500">
+              Selected: {selectedTeams.length} teams
+            </div>
+
+            <div className="mt-4 flex gap-2 justify-end">
+              <button
+                onClick={() => {
+                  setEditMode(false);
+                  setEditingGroup(null);
+                }}
+                className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveGroup}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Groups Display */}
       {groups.length > 0 && (
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
           {groups.map((group) => (
             <div key={group._id} className="bg-white rounded-xl shadow overflow-hidden">
-              <div className="bg-green-600 text-white px-4 py-3">
+              <div className="bg-green-600 text-white px-4 py-3 flex justify-between items-center">
                 <h3 className="font-bold">{group.name}</h3>
+                <button
+                  onClick={() => handleEditGroup(group)}
+                  className="text-green-100 hover:text-white text-sm"
+                >
+                  ✏️ Edit
+                </button>
               </div>
               <ul className="divide-y">
                 {group.teams.map((team, idx) => (
@@ -161,12 +321,20 @@ export default function GroupsPage() {
                     <span className="w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center text-sm mr-3">
                       {idx + 1}
                     </span>
+                    {team.logoUrl && (
+                      <img src={team.logoUrl} alt="" className="w-8 h-8 object-contain mr-2" />
+                    )}
                     <div>
                       <p className="font-medium">{team.shortName}</p>
                       <p className="text-xs text-gray-500">{team.name}</p>
                     </div>
                   </li>
                 ))}
+                {group.teams.length === 0 && (
+                  <li className="px-4 py-6 text-center text-gray-400">
+                    No teams assigned
+                  </li>
+                )}
               </ul>
             </div>
           ))}
@@ -176,8 +344,8 @@ export default function GroupsPage() {
       {groups.length === 0 && (
         <div className="bg-gray-50 rounded-xl p-8 text-center text-gray-500">
           <p className="text-4xl mb-4">🎲</p>
-          <p>グループ抽選がまだ行われていません</p>
-          <p className="text-sm mt-2">上の設定で抽選を実行してください</p>
+          <p>No groups drawn yet</p>
+          <p className="text-sm mt-2">Configure settings above and start the draw</p>
         </div>
       )}
     </div>

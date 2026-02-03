@@ -52,10 +52,10 @@ export default function AdminDashboard() {
   };
 
   const statCards = [
-    { label: '登録チーム数', value: stats.totalTeams, color: 'bg-blue-500', link: '/admin/teams' },
-    { label: 'グループ数', value: stats.totalGroups, color: 'bg-green-500', link: '/admin/groups' },
-    { label: '総試合数', value: stats.totalMatches, color: 'bg-purple-500', link: '/admin/matches' },
-    { label: '終了試合', value: stats.completedMatches, color: 'bg-orange-500', link: '/admin/scores' },
+    { label: 'Registered Teams', value: stats.totalTeams, color: 'bg-blue-500', link: '/admin/teams' },
+    { label: 'Groups', value: stats.totalGroups, color: 'bg-green-500', link: '/admin/groups' },
+    { label: 'Total Matches', value: stats.totalMatches, color: 'bg-purple-500', link: '/admin/matches' },
+    { label: 'Completed', value: stats.completedMatches, color: 'bg-orange-500', link: '/admin/scores' },
   ];
 
   if (loading) {
@@ -68,7 +68,7 @@ export default function AdminDashboard() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-gray-800">ダッシュボード</h2>
+      <h2 className="text-2xl font-bold text-gray-800">Dashboard</h2>
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -84,58 +84,58 @@ export default function AdminDashboard() {
 
       {/* Quick Actions */}
       <div className="bg-white rounded-xl shadow p-6">
-        <h3 className="text-lg font-bold text-gray-800 mb-4">クイックアクション</h3>
+        <h3 className="text-lg font-bold text-gray-800 mb-4">Quick Actions</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Link
             href="/admin/teams"
             className="flex flex-col items-center p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition"
           >
             <span className="text-3xl mb-2">👥</span>
-            <span className="text-sm font-medium text-blue-800">チーム登録</span>
+            <span className="text-sm font-medium text-blue-800">Add Teams</span>
           </Link>
           <Link
             href="/admin/groups"
             className="flex flex-col items-center p-4 bg-green-50 rounded-lg hover:bg-green-100 transition"
           >
             <span className="text-3xl mb-2">🎲</span>
-            <span className="text-sm font-medium text-green-800">グループ抽選</span>
+            <span className="text-sm font-medium text-green-800">Group Draw</span>
           </Link>
           <Link
             href="/admin/matches"
             className="flex flex-col items-center p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition"
           >
             <span className="text-3xl mb-2">📅</span>
-            <span className="text-sm font-medium text-purple-800">試合作成</span>
+            <span className="text-sm font-medium text-purple-800">Create Matches</span>
           </Link>
           <Link
             href="/admin/scores"
             className="flex flex-col items-center p-4 bg-orange-50 rounded-lg hover:bg-orange-100 transition"
           >
             <span className="text-3xl mb-2">⚽</span>
-            <span className="text-sm font-medium text-orange-800">スコア入力</span>
+            <span className="text-sm font-medium text-orange-800">Update Scores</span>
           </Link>
         </div>
       </div>
 
       {/* Setup Guide */}
       <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6">
-        <h3 className="text-lg font-bold text-yellow-800 mb-3">📋 大会セットアップガイド</h3>
+        <h3 className="text-lg font-bold text-yellow-800 mb-3">📋 Tournament Setup Guide</h3>
         <ol className="space-y-2 text-yellow-900">
           <li className="flex items-start">
             <span className="bg-yellow-200 rounded-full w-6 h-6 flex items-center justify-center mr-3 mt-0.5 text-sm font-bold">1</span>
-            <span><strong>チーム登録</strong> - 参加するチームを登録します</span>
+            <span><strong>Register Teams</strong> - Add all participating teams</span>
           </li>
           <li className="flex items-start">
             <span className="bg-yellow-200 rounded-full w-6 h-6 flex items-center justify-center mr-3 mt-0.5 text-sm font-bold">2</span>
-            <span><strong>グループ抽選</strong> - ランダムにグループ分けを行います</span>
+            <span><strong>Group Draw</strong> - Randomly assign teams to groups</span>
           </li>
           <li className="flex items-start">
             <span className="bg-yellow-200 rounded-full w-6 h-6 flex items-center justify-center mr-3 mt-0.5 text-sm font-bold">3</span>
-            <span><strong>試合生成</strong> - グループステージの試合を自動生成します</span>
+            <span><strong>Generate Matches</strong> - Auto-generate group stage fixtures</span>
           </li>
           <li className="flex items-start">
             <span className="bg-yellow-200 rounded-full w-6 h-6 flex items-center justify-center mr-3 mt-0.5 text-sm font-bold">4</span>
-            <span><strong>スコア入力</strong> - 試合結果を入力すると順位が自動更新されます</span>
+            <span><strong>Update Scores</strong> - Enter results to auto-update standings</span>
           </li>
         </ol>
       </div>

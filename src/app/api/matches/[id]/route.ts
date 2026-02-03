@@ -34,8 +34,15 @@ export async function PUT(
       return NextResponse.json({ error: 'Match not found' }, { status: 404 });
     }
 
-    // If updating scores, recalculate team stats
-    if (body.homeScore !== undefined && body.awayScore !== undefined) {
+    // Handle status change to live
+    if (body.status === 'live' && existingMatch.status !== 'live') {
+      body.startedAt = new Date();
+      if (body.homeScore === undefined) body.homeScore = 0;
+      if (body.awayScore === undefined) body.awayScore = 0;
+    }
+
+    // Handle status change to completed - update team stats
+    if (body.status === 'completed' && body.homeScore !== undefined && body.awayScore !== undefined) {
       const homeTeam = await Team.findById(existingMatch.homeTeam);
       const awayTeam = await Team.findById(existingMatch.awayTeam);
 
@@ -45,7 +52,6 @@ export async function PUT(
           const prevHomeScore = existingMatch.homeScore;
           const prevAwayScore = existingMatch.awayScore;
 
-          // Reverse home team stats
           homeTeam.played -= 1;
           homeTeam.goalsFor -= prevHomeScore;
           homeTeam.goalsAgainst -= prevAwayScore;
@@ -60,7 +66,6 @@ export async function PUT(
             homeTeam.points -= 1;
           }
 
-          // Reverse away team stats
           awayTeam.played -= 1;
           awayTeam.goalsFor -= prevAwayScore;
           awayTeam.goalsAgainst -= prevHomeScore;
@@ -76,38 +81,40 @@ export async function PUT(
           }
         }
 
-        // Apply new stats
-        const newHomeScore = body.homeScore;
-        const newAwayScore = body.awayScore;
+        // Apply new stats only if completing the match
+        if (body.status === 'completed') {
+          const newHomeScore = body.homeScore;
+          const newAwayScore = body.awayScore;
 
-        homeTeam.played += 1;
-        homeTeam.goalsFor += newHomeScore;
-        homeTeam.goalsAgainst += newAwayScore;
+          homeTeam.played += 1;
+          homeTeam.goalsFor += newHomeScore;
+          homeTeam.goalsAgainst += newAwayScore;
 
-        awayTeam.played += 1;
-        awayTeam.goalsFor += newAwayScore;
-        awayTeam.goalsAgainst += newHomeScore;
+          awayTeam.played += 1;
+          awayTeam.goalsFor += newAwayScore;
+          awayTeam.goalsAgainst += newHomeScore;
 
-        if (newHomeScore > newAwayScore) {
-          homeTeam.won += 1;
-          homeTeam.points += 3;
-          awayTeam.lost += 1;
-        } else if (newHomeScore < newAwayScore) {
-          awayTeam.won += 1;
-          awayTeam.points += 3;
-          homeTeam.lost += 1;
-        } else {
-          homeTeam.drawn += 1;
-          awayTeam.drawn += 1;
-          homeTeam.points += 1;
-          awayTeam.points += 1;
+          if (newHomeScore > newAwayScore) {
+            homeTeam.won += 1;
+            homeTeam.points += 3;
+            awayTeam.lost += 1;
+          } else if (newHomeScore < newAwayScore) {
+            awayTeam.won += 1;
+            awayTeam.points += 3;
+            homeTeam.lost += 1;
+          } else {
+            homeTeam.drawn += 1;
+            awayTeam.drawn += 1;
+            homeTeam.points += 1;
+            awayTeam.points += 1;
+          }
+
+          body.completedAt = new Date();
         }
 
         await homeTeam.save();
         await awayTeam.save();
       }
-
-      body.status = 'completed';
     }
 
     const match = await Match.findByIdAndUpdate(params.id, body, { new: true })

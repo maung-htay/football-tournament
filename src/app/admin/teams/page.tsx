@@ -6,6 +6,7 @@ interface Team {
   _id: string;
   name: string;
   shortName: string;
+  logoUrl?: string;
   groupId?: { name: string };
 }
 
@@ -13,7 +14,8 @@ export default function TeamsPage() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({ name: '', shortName: '' });
+  const [editingTeam, setEditingTeam] = useState<Team | null>(null);
+  const [formData, setFormData] = useState({ name: '', shortName: '', logoUrl: '' });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -34,36 +36,57 @@ export default function TeamsPage() {
     }
   };
 
+  const resetForm = () => {
+    setFormData({ name: '', shortName: '', logoUrl: '' });
+    setEditingTeam(null);
+    setShowForm(false);
+    setError('');
+  };
+
+  const handleEdit = (team: Team) => {
+    setEditingTeam(team);
+    setFormData({
+      name: team.name,
+      shortName: team.shortName,
+      logoUrl: team.logoUrl || '',
+    });
+    setShowForm(true);
+    setError('');
+    setSuccess('');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setSuccess('');
 
     if (!formData.name || !formData.shortName) {
-      setError('すべての項目を入力してください');
+      setError('Please fill in required fields');
       return;
     }
 
     if (formData.shortName.length > 5) {
-      setError('略称は5文字以内で入力してください');
+      setError('Short name must be 5 characters or less');
       return;
     }
 
     try {
-      const res = await fetch('/api/teams', {
-        method: 'POST',
+      const url = editingTeam ? `/api/teams/${editingTeam._id}` : '/api/teams';
+      const method = editingTeam ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
       });
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || 'Failed to create team');
+        throw new Error(data.error || 'Failed to save team');
       }
 
-      setSuccess('チームを登録しました');
-      setFormData({ name: '', shortName: '' });
-      setShowForm(false);
+      setSuccess(editingTeam ? 'Team updated successfully' : 'Team registered successfully');
+      resetForm();
       fetchTeams();
     } catch (error: any) {
       setError(error.message);
@@ -71,15 +94,15 @@ export default function TeamsPage() {
   };
 
   const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`「${name}」を削除しますか？`)) return;
+    if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
 
     try {
       const res = await fetch(`/api/teams/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to delete');
-      setSuccess('チームを削除しました');
+      setSuccess('Team deleted successfully');
       fetchTeams();
     } catch (error) {
-      setError('削除に失敗しました');
+      setError('Failed to delete team');
     }
   };
 
@@ -94,12 +117,20 @@ export default function TeamsPage() {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-800">チーム管理</h2>
+        <h2 className="text-2xl font-bold text-gray-800">Team Management</h2>
         <button
-          onClick={() => setShowForm(!showForm)}
+          onClick={() => {
+            if (showForm) {
+              resetForm();
+            } else {
+              setShowForm(true);
+              setEditingTeam(null);
+              setFormData({ name: '', shortName: '', logoUrl: '' });
+            }
+          }}
           className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
         >
-          {showForm ? 'キャンセル' : '+ チーム追加'}
+          {showForm ? 'Cancel' : '+ Add Team'}
         </button>
       </div>
 
@@ -115,43 +146,79 @@ export default function TeamsPage() {
         </div>
       )}
 
-      {/* Add Form */}
+      {/* Add/Edit Form */}
       {showForm && (
         <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow p-6">
-          <h3 className="text-lg font-bold mb-4">新規チーム登録</h3>
-          <div className="grid md:grid-cols-2 gap-4">
+          <h3 className="text-lg font-bold mb-4">
+            {editingTeam ? 'Edit Team' : 'Register New Team'}
+          </h3>
+          <div className="grid md:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                チーム名
+                Team Name *
               </label>
               <input
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="例: 東京ユナイテッド"
+                placeholder="e.g. Tokyo United"
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                略称 (5文字以内)
+                Short Name * (max 5)
               </label>
               <input
                 type="text"
                 value={formData.shortName}
-                onChange={(e) => setFormData({ ...formData, shortName: e.target.value.slice(0, 5) })}
+                onChange={(e) => setFormData({ ...formData, shortName: e.target.value.slice(0, 5).toUpperCase() })}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="例: TKY"
+                placeholder="e.g. TKY"
                 maxLength={5}
               />
             </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Logo URL (optional)
+              </label>
+              <input
+                type="url"
+                value={formData.logoUrl}
+                onChange={(e) => setFormData({ ...formData, logoUrl: e.target.value })}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="https://example.com/logo.png"
+              />
+            </div>
           </div>
-          <button
-            type="submit"
-            className="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition"
-          >
-            登録
-          </button>
+          {formData.logoUrl && (
+            <div className="mt-4">
+              <p className="text-sm text-gray-500 mb-2">Logo Preview:</p>
+              <img 
+                src={formData.logoUrl} 
+                alt="Logo preview" 
+                className="w-16 h-16 object-contain border rounded"
+                onError={(e) => (e.currentTarget.style.display = 'none')}
+              />
+            </div>
+          )}
+          <div className="mt-4 flex gap-2">
+            <button
+              type="submit"
+              className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition"
+            >
+              {editingTeam ? 'Update' : 'Register'}
+            </button>
+            {editingTeam && (
+              <button
+                type="button"
+                onClick={resetForm}
+                className="bg-gray-300 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-400 transition"
+              >
+                Cancel
+              </button>
+            )}
+          </div>
         </form>
       )}
 
@@ -161,46 +228,64 @@ export default function TeamsPage() {
           <thead className="bg-gray-50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                チーム名
+                Logo
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                略称
+                Team Name
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                グループ
+                Short Name
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                Group
               </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                操作
+                Actions
               </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
             {teams.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
-                  チームがまだ登録されていません
+                <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                  No teams registered yet
                 </td>
               </tr>
             ) : (
               teams.map((team) => (
                 <tr key={team._id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4">
+                    {team.logoUrl ? (
+                      <img src={team.logoUrl} alt="" className="w-10 h-10 object-contain" />
+                    ) : (
+                      <div className="w-10 h-10 bg-gray-200 rounded flex items-center justify-center text-gray-400">
+                        ⚽
+                      </div>
+                    )}
+                  </td>
                   <td className="px-6 py-4 font-medium text-gray-900">{team.name}</td>
                   <td className="px-6 py-4 text-gray-600">{team.shortName}</td>
                   <td className="px-6 py-4">
                     {team.groupId ? (
                       <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-sm">
-                        {(team.groupId as any).name || '割当済み'}
+                        {(team.groupId as any).name || 'Assigned'}
                       </span>
                     ) : (
-                      <span className="text-gray-400">未割当</span>
+                      <span className="text-gray-400">Unassigned</span>
                     )}
                   </td>
-                  <td className="px-6 py-4 text-right">
+                  <td className="px-6 py-4 text-right space-x-2">
+                    <button
+                      onClick={() => handleEdit(team)}
+                      className="text-blue-600 hover:text-blue-800 text-sm"
+                    >
+                      Edit
+                    </button>
                     <button
                       onClick={() => handleDelete(team._id, team.name)}
                       className="text-red-600 hover:text-red-800 text-sm"
                     >
-                      削除
+                      Delete
                     </button>
                   </td>
                 </tr>
@@ -211,7 +296,7 @@ export default function TeamsPage() {
       </div>
 
       <div className="text-sm text-gray-500">
-        登録チーム数: {teams.length}
+        Total Teams: {teams.length}
       </div>
     </div>
   );
