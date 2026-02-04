@@ -6,16 +6,29 @@ export function middleware(request: NextRequest) {
   if (request.nextUrl.pathname.startsWith('/admin')) {
     const authHeader = request.headers.get('authorization');
 
-    // Valid credentials
-    const validUsername = 'admin';
-    const validPassword = 'admin123!';
-    const validAuth = 'Basic ' + Buffer.from(`${validUsername}:${validPassword}`).toString('base64');
+    // Get credentials from env or use defaults
+    const validUsername = process.env.ADMIN_USERNAME || 'admin';
+    const validPassword = process.env.ADMIN_PASSWORD || 'admin123!';
+    
+    // Create expected auth header using global btoa (available in Edge Runtime)
+    const credentials = `${validUsername}:${validPassword}`;
+    const encoded = globalThis.btoa(credentials);
+    const expectedAuth = `Basic ${encoded}`;
 
-    if (!authHeader || authHeader !== validAuth) {
+    if (!authHeader) {
       return new NextResponse('Authentication required', {
         status: 401,
         headers: {
-          'WWW-Authenticate': 'Basic realm="Admin Area"',
+          'WWW-Authenticate': 'Basic realm="Admin"',
+        },
+      });
+    }
+
+    if (authHeader !== expectedAuth) {
+      return new NextResponse('Invalid credentials', {
+        status: 401,
+        headers: {
+          'WWW-Authenticate': 'Basic realm="Admin"',
         },
       });
     }
@@ -25,5 +38,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: '/admin/:path*',
+  matcher: ['/admin', '/admin/:path*'],
 };

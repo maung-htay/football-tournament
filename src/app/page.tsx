@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 
 interface Team {
   _id: string;
@@ -36,17 +37,11 @@ interface Match {
   status: string;
 }
 
-// Team display component - shows logo if available, otherwise team name
-const TeamDisplay = ({ team, showName = false, size = 'md' }: { team: Team | null; showName?: boolean; size?: 'sm' | 'md' | 'lg' }) => {
+// Team display component
+const TeamDisplay = ({ team, showName = false }: { team: Team | null; showName?: boolean }) => {
   if (!team) {
     return <span className="text-gray-400">TBD</span>;
   }
-
-  const sizeClasses = {
-    sm: 'w-6 h-6',
-    md: 'w-10 h-10 sm:w-12 sm:h-12',
-    lg: 'w-12 h-12 sm:w-16 sm:h-16',
-  };
 
   return (
     <div className="flex flex-col items-center">
@@ -54,10 +49,10 @@ const TeamDisplay = ({ team, showName = false, size = 'md' }: { team: Team | nul
         <img 
           src={team.logoUrl} 
           alt={team.name}
-          className={`${sizeClasses[size]} object-contain mb-1`}
+          className="w-10 h-10 sm:w-12 sm:h-12 object-contain mb-1"
         />
       ) : (
-        <div className={`${sizeClasses[size]} bg-gray-200 rounded-full flex items-center justify-center mb-1`}>
+        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-200 rounded-full flex items-center justify-center mb-1">
           <span className="text-xs sm:text-sm font-bold text-gray-500">{team.shortName.slice(0, 2)}</span>
         </div>
       )}
@@ -70,31 +65,40 @@ const TeamDisplay = ({ team, showName = false, size = 'md' }: { team: Team | nul
 export default function Home() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
   const [activeTab, setActiveTab] = useState<'matches' | 'standings'>('matches');
   const [matchFilter, setMatchFilter] = useState<'live' | 'fixtures' | 'completed'>('fixtures');
+  const [teamFilter, setTeamFilter] = useState<string>('all');
   const [loading, setLoading] = useState(true);
+  const [showContact, setShowContact] = useState(false);
 
   useEffect(() => {
     fetchData();
+    // Check if contact is enabled
+    setShowContact(process.env.NEXT_PUBLIC_SHOW_CONTACT === 'true');
     const interval = setInterval(fetchData, 30000);
     return () => clearInterval(interval);
   }, []);
 
   const fetchData = async () => {
     try {
-      const [groupsRes, matchesRes] = await Promise.all([
+      const [groupsRes, matchesRes, teamsRes] = await Promise.all([
         fetch('/api/groups'),
         fetch('/api/matches'),
+        fetch('/api/teams'),
       ]);
       const groupsData = await groupsRes.json();
       const matchesData = await matchesRes.json();
+      const teamsData = await teamsRes.json();
       
       setGroups(Array.isArray(groupsData) ? groupsData : []);
       setMatches(Array.isArray(matchesData) ? matchesData : []);
+      setTeams(Array.isArray(teamsData) ? teamsData : []);
     } catch (error) {
       console.error('Failed to fetch data:', error);
       setGroups([]);
       setMatches([]);
+      setTeams([]);
     } finally {
       setLoading(false);
     }
@@ -142,10 +146,19 @@ export default function Home() {
   };
 
   const filteredMatches = matches.filter((match) => {
-    if (matchFilter === 'live') return match.status === 'live';
-    if (matchFilter === 'fixtures') return match.status === 'scheduled';
-    if (matchFilter === 'completed') return match.status === 'completed' || match.status === 'cancelled';
-    return true;
+    // Status filter
+    let statusMatch = true;
+    if (matchFilter === 'live') statusMatch = match.status === 'live';
+    if (matchFilter === 'fixtures') statusMatch = match.status === 'scheduled';
+    if (matchFilter === 'completed') statusMatch = match.status === 'completed' || match.status === 'cancelled';
+    
+    // Team filter
+    let teamMatch = true;
+    if (teamFilter !== 'all') {
+      teamMatch = match.homeTeam?._id === teamFilter || match.awayTeam?._id === teamFilter;
+    }
+    
+    return statusMatch && teamMatch;
   }).sort((a, b) => {
     if (matchFilter === 'completed') {
       return new Date(b.matchDate).getTime() - new Date(a.matchDate).getTime();
@@ -168,8 +181,13 @@ export default function Home() {
       {/* Header */}
       <header className="bg-green-600 text-white shadow-lg">
         <div className="max-w-6xl mx-auto px-4 py-4 sm:py-6">
-          <div className="text-center sm:text-left">
+          <div className="flex justify-between items-center">
             <h1 className="text-xl sm:text-2xl font-bold">⚽ Football Tournament</h1>
+            {showContact && (
+              <Link href="/contact" className="text-green-100 hover:text-white text-sm">
+                📞 Contact
+              </Link>
+            )}
           </div>
         </div>
       </header>
@@ -204,6 +222,22 @@ export default function Home() {
       <div className="max-w-6xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
         {activeTab === 'matches' ? (
           <div className="space-y-3 sm:space-y-4">
+            {/* Team Filter */}
+            <div className="bg-white rounded-lg p-2 shadow">
+              <select
+                value={teamFilter}
+                onChange={(e) => setTeamFilter(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-500"
+              >
+                <option value="all">🔍 All Teams</option>
+                {teams.map(team => (
+                  <option key={team._id} value={team._id}>
+                    {team.shortName} - {team.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             {/* Match Filter Tabs */}
             <div className="flex space-x-1 sm:space-x-2 bg-gray-100 rounded-lg p-1">
               <button
@@ -252,6 +286,7 @@ export default function Home() {
                   {matchFilter === 'live' && 'No live matches right now'}
                   {matchFilter === 'fixtures' && 'No upcoming matches scheduled'}
                   {matchFilter === 'completed' && 'No completed matches yet'}
+                  {teamFilter !== 'all' && ' for this team'}
                 </p>
               </div>
             ) : (
@@ -271,12 +306,9 @@ export default function Home() {
                   </div>
                   <div className="p-3 sm:p-4">
                     <div className="flex items-center justify-between">
-                      {/* Home Team */}
                       <div className="flex-1 text-center">
                         <TeamDisplay team={match.homeTeam} showName />
                       </div>
-
-                      {/* Score / Time */}
                       <div className="px-2 sm:px-6 min-w-[80px] sm:min-w-[100px]">
                         {match.status === 'completed' || match.status === 'live' ? (
                           <div className="text-center">
@@ -298,8 +330,6 @@ export default function Home() {
                           </div>
                         )}
                       </div>
-
-                      {/* Away Team */}
                       <div className="flex-1 text-center">
                         <TeamDisplay team={match.awayTeam} showName />
                       </div>
