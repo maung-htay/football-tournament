@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import Match from '@/models/Match';
 import Team from '@/models/Team';
+import Group from '@/models/Group';
+
+// Ensure models are registered
+const _Team = Team;
+const _Group = Group;
 
 export async function GET(
   request: NextRequest,

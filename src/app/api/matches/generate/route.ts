@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import Group from '@/models/Group';
 import Match from '@/models/Match';
+import Team from '@/models/Team';
+
+// Ensure models are registered
+const _Team = Team;
 
 export async function POST(request: NextRequest) {
   try {

@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import Match from '@/models/Match';
+import Team from '@/models/Team';
+import Group from '@/models/Group';
+
+// Ensure models are registered
+const _Team = Team;
+const _Group = Group;
 
 export async function GET(request: NextRequest) {
   try {
@@ -21,6 +27,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(matches);
   } catch (error) {
+    console.error('Failed to fetch matches:', error);
     return NextResponse.json({ error: 'Failed to fetch matches' }, { status: 500 });
   }
 }
@@ -29,13 +36,32 @@ export async function POST(request: NextRequest) {
   try {
     await dbConnect();
     const body = await request.json();
-    const match = await Match.create(body);
+    
+    // Clean up null values
+    const matchData: any = {
+      round: body.round,
+      venue: body.venue,
+      matchDate: body.matchDate,
+      matchTime: body.matchTime,
+      status: 'scheduled',
+    };
+
+    if (body.matchName) matchData.matchName = body.matchName;
+    if (body.homeTeam) matchData.homeTeam = body.homeTeam;
+    if (body.awayTeam) matchData.awayTeam = body.awayTeam;
+    if (body.homePlaceholder) matchData.homePlaceholder = body.homePlaceholder;
+    if (body.awayPlaceholder) matchData.awayPlaceholder = body.awayPlaceholder;
+    if (body.groupId) matchData.groupId = body.groupId;
+
+    const match = await Match.create(matchData);
     const populated = await Match.findById(match._id)
       .populate('homeTeam')
-      .populate('awayTeam');
+      .populate('awayTeam')
+      .populate('groupId');
+      
     return NextResponse.json(populated, { status: 201 });
   } catch (error) {
-    console.error(error);
+    console.error('Failed to create match:', error);
     return NextResponse.json({ error: 'Failed to create match' }, { status: 500 });
   }
 }

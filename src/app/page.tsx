@@ -25,41 +25,40 @@ interface Group {
 
 interface Match {
   _id: string;
-  homeTeam: Team;
-  awayTeam: Team;
+  homeTeam?: Team;
+  awayTeam?: Team;
+  homePlaceholder?: string;
+  awayPlaceholder?: string;
   homeScore: number | null;
   awayScore: number | null;
   groupId?: { name: string };
   round: string;
+  matchName?: string;
   venue: string;
   matchDate: string;
   matchTime: string;
   status: string;
 }
 
-// Team display component
-const TeamDisplay = ({ team, showName = false }: { team: Team | null; showName?: boolean }) => {
-  if (!team) {
-    return <span className="text-gray-400">TBD</span>;
+// Team display component - uses full name only, no logo
+const TeamDisplay = ({ team, placeholder }: { team?: Team | null; placeholder?: string }) => {
+  if (team) {
+    return (
+      <div className="flex flex-col items-center text-center">
+        <p className="font-bold text-sm sm:text-base leading-tight">{team.name}</p>
+      </div>
+    );
   }
-
-  return (
-    <div className="flex flex-col items-center">
-      {team.logoUrl ? (
-        <img 
-          src={team.logoUrl} 
-          alt={team.name}
-          className="w-10 h-10 sm:w-12 sm:h-12 object-contain mb-1"
-        />
-      ) : (
-        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-200 rounded-full flex items-center justify-center mb-1">
-          <span className="text-xs sm:text-sm font-bold text-gray-500">{team.shortName.slice(0, 2)}</span>
-        </div>
-      )}
-      <p className="font-bold text-sm sm:text-lg">{team.shortName}</p>
-      {showName && <p className="text-xs text-gray-500 hidden sm:block">{team.name}</p>}
-    </div>
-  );
+  
+  if (placeholder) {
+    return (
+      <div className="flex flex-col items-center text-center">
+        <p className="font-medium text-sm sm:text-base text-gray-500">{placeholder}</p>
+      </div>
+    );
+  }
+  
+  return <span className="text-gray-400">TBD</span>;
 };
 
 export default function Home() {
@@ -74,7 +73,6 @@ export default function Home() {
 
   useEffect(() => {
     fetchData();
-    // Check if contact is enabled
     setShowContact(process.env.NEXT_PUBLIC_SHOW_CONTACT === 'true');
     const interval = setInterval(fetchData, 30000);
     return () => clearInterval(interval);
@@ -146,13 +144,11 @@ export default function Home() {
   };
 
   const filteredMatches = matches.filter((match) => {
-    // Status filter
     let statusMatch = true;
     if (matchFilter === 'live') statusMatch = match.status === 'live';
     if (matchFilter === 'fixtures') statusMatch = match.status === 'scheduled';
     if (matchFilter === 'completed') statusMatch = match.status === 'completed' || match.status === 'cancelled';
     
-    // Team filter
     let teamMatch = true;
     if (teamFilter !== 'all') {
       teamMatch = match.homeTeam?._id === teamFilter || match.awayTeam?._id === teamFilter;
@@ -198,9 +194,7 @@ export default function Home() {
           <button
             onClick={() => setActiveTab('matches')}
             className={`flex-1 py-2 sm:py-3 px-2 sm:px-4 rounded-lg font-medium transition text-sm sm:text-base ${
-              activeTab === 'matches'
-                ? 'bg-green-600 text-white'
-                : 'text-gray-600 hover:bg-gray-100'
+              activeTab === 'matches' ? 'bg-green-600 text-white' : 'text-gray-600 hover:bg-gray-100'
             }`}
           >
             📅 Matches
@@ -208,9 +202,7 @@ export default function Home() {
           <button
             onClick={() => setActiveTab('standings')}
             className={`flex-1 py-2 sm:py-3 px-2 sm:px-4 rounded-lg font-medium transition text-sm sm:text-base ${
-              activeTab === 'standings'
-                ? 'bg-green-600 text-white'
-                : 'text-gray-600 hover:bg-gray-100'
+              activeTab === 'standings' ? 'bg-green-600 text-white' : 'text-gray-600 hover:bg-gray-100'
             }`}
           >
             📊 Standings
@@ -231,9 +223,7 @@ export default function Home() {
               >
                 <option value="all">🔍 All Teams</option>
                 {teams.map(team => (
-                  <option key={team._id} value={team._id}>
-                    {team.shortName} - {team.name}
-                  </option>
+                  <option key={team._id} value={team._id}>{team.name}</option>
                 ))}
               </select>
             </div>
@@ -243,26 +233,20 @@ export default function Home() {
               <button
                 onClick={() => setMatchFilter('live')}
                 className={`flex-1 py-2 px-2 sm:px-3 rounded-lg text-xs sm:text-sm font-medium transition flex items-center justify-center gap-1 sm:gap-2 ${
-                  matchFilter === 'live'
-                    ? 'bg-red-500 text-white'
-                    : 'text-gray-600 hover:bg-gray-200'
+                  matchFilter === 'live' ? 'bg-red-500 text-white' : 'text-gray-600 hover:bg-gray-200'
                 }`}
               >
                 🔴 Live
                 {liveCount > 0 && (
                   <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-xs ${
                     matchFilter === 'live' ? 'bg-white text-red-500' : 'bg-red-500 text-white'
-                  }`}>
-                    {liveCount}
-                  </span>
+                  }`}>{liveCount}</span>
                 )}
               </button>
               <button
                 onClick={() => setMatchFilter('fixtures')}
                 className={`flex-1 py-2 px-2 sm:px-3 rounded-lg text-xs sm:text-sm font-medium transition ${
-                  matchFilter === 'fixtures'
-                    ? 'bg-blue-500 text-white'
-                    : 'text-gray-600 hover:bg-gray-200'
+                  matchFilter === 'fixtures' ? 'bg-blue-500 text-white' : 'text-gray-600 hover:bg-gray-200'
                 }`}
               >
                 📅 Fixtures
@@ -270,9 +254,7 @@ export default function Home() {
               <button
                 onClick={() => setMatchFilter('completed')}
                 className={`flex-1 py-2 px-2 sm:px-3 rounded-lg text-xs sm:text-sm font-medium transition ${
-                  matchFilter === 'completed'
-                    ? 'bg-green-500 text-white'
-                    : 'text-gray-600 hover:bg-gray-200'
+                  matchFilter === 'completed' ? 'bg-green-500 text-white' : 'text-gray-600 hover:bg-gray-200'
                 }`}
               >
                 ✓ Done
@@ -301,13 +283,14 @@ export default function Home() {
                     <span className="text-xs sm:text-sm text-gray-600">
                       {getRoundLabel(match.round)}
                       {match.groupId && ` - ${match.groupId.name}`}
+                      {match.matchName && ` (${match.matchName})`}
                     </span>
                     {getStatusBadge(match.status)}
                   </div>
                   <div className="p-3 sm:p-4">
                     <div className="flex items-center justify-between">
-                      <div className="flex-1 text-center">
-                        <TeamDisplay team={match.homeTeam} showName />
+                      <div className="flex-1">
+                        <TeamDisplay team={match.homeTeam} placeholder={match.homePlaceholder} />
                       </div>
                       <div className="px-2 sm:px-6 min-w-[80px] sm:min-w-[100px]">
                         {match.status === 'completed' || match.status === 'live' ? (
@@ -330,8 +313,8 @@ export default function Home() {
                           </div>
                         )}
                       </div>
-                      <div className="flex-1 text-center">
-                        <TeamDisplay team={match.awayTeam} showName />
+                      <div className="flex-1">
+                        <TeamDisplay team={match.awayTeam} placeholder={match.awayPlaceholder} />
                       </div>
                     </div>
                     <div className="mt-2 sm:mt-3 text-center text-xs sm:text-sm text-gray-500">
@@ -380,21 +363,9 @@ export default function Home() {
                             return b.goalsFor - a.goalsFor;
                           })
                           .map((team, idx) => (
-                            <tr
-                              key={team._id}
-                              className={`border-t ${idx < 2 ? 'bg-green-50' : ''}`}
-                            >
+                            <tr key={team._id} className={`border-t ${idx < 2 ? 'bg-green-50' : ''}`}>
                               <td className="px-2 sm:px-3 py-2">
-                                <div className="flex items-center gap-1 sm:gap-2">
-                                  {team.logoUrl ? (
-                                    <img src={team.logoUrl} alt="" className="w-5 h-5 sm:w-6 sm:h-6 object-contain" />
-                                  ) : (
-                                    <div className="w-5 h-5 sm:w-6 sm:h-6 bg-gray-200 rounded-full flex items-center justify-center">
-                                      <span className="text-[8px] sm:text-[10px] font-bold text-gray-500">{team.shortName.slice(0, 2)}</span>
-                                    </div>
-                                  )}
-                                  <span className="font-medium">{team.shortName}</span>
-                                </div>
+                                <span className="font-medium">{team.name}</span>
                               </td>
                               <td className="px-1 sm:px-2 py-2 text-center">{team.played}</td>
                               <td className="px-1 sm:px-2 py-2 text-center">{team.won}</td>
@@ -402,9 +373,7 @@ export default function Home() {
                               <td className="px-1 sm:px-2 py-2 text-center">{team.lost}</td>
                               <td className="px-1 sm:px-2 py-2 text-center hidden sm:table-cell">{team.goalsFor}</td>
                               <td className="px-1 sm:px-2 py-2 text-center hidden sm:table-cell">{team.goalsAgainst}</td>
-                              <td className="px-1 sm:px-2 py-2 text-center">
-                                {team.goalsFor - team.goalsAgainst}
-                              </td>
+                              <td className="px-1 sm:px-2 py-2 text-center">{team.goalsFor - team.goalsAgainst}</td>
                               <td className="px-2 sm:px-3 py-2 text-center font-bold">{team.points}</td>
                             </tr>
                           ))}

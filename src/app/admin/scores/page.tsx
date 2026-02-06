@@ -27,16 +27,11 @@ const TeamDisplay = ({ team }: { team: Team | null }) => {
   if (!team) return <span className="text-gray-400">TBD</span>;
   
   return (
-    <div className="flex flex-col items-center">
-      {team.logoUrl ? (
+    <div className="flex flex-col items-center text-center">
+      {team.logoUrl && (
         <img src={team.logoUrl} alt={team.name} className="w-10 h-10 sm:w-12 sm:h-12 object-contain mb-1" />
-      ) : (
-        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-200 rounded-full flex items-center justify-center mb-1">
-          <span className="text-sm font-bold text-gray-500">{team.shortName.slice(0, 2)}</span>
-        </div>
       )}
-      <p className="font-bold text-sm sm:text-lg">{team.shortName}</p>
-      <p className="text-xs text-gray-500 hidden sm:block">{team.name}</p>
+      <p className="font-bold text-sm sm:text-base leading-tight">{team.name}</p>
     </div>
   );
 };

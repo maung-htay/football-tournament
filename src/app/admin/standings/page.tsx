@@ -117,17 +117,10 @@ export default function StandingsPage() {
                           <td className="px-2 sm:px-3 py-2 font-medium text-gray-500">{idx + 1}</td>
                           <td className="px-2 sm:px-3 py-2">
                             <div className="flex items-center gap-1 sm:gap-2">
-                              {team.logoUrl ? (
+                              {team.logoUrl && (
                                 <img src={team.logoUrl} alt="" className="w-5 h-5 sm:w-6 sm:h-6 object-contain" />
-                              ) : (
-                                <div className="w-5 h-5 sm:w-6 sm:h-6 bg-gray-200 rounded-full flex items-center justify-center">
-                                  <span className="text-[8px] sm:text-[10px] font-bold text-gray-500">{team.shortName.slice(0, 2)}</span>
-                                </div>
                               )}
-                              <div>
-                                <span className="font-medium">{team.shortName}</span>
-                                <span className="text-xs text-gray-400 ml-1 hidden lg:inline">{team.name}</span>
-                              </div>
+                              <span className="font-medium">{team.name}</span>
                             </div>
                           </td>
                           <td className="px-1 sm:px-2 py-2 text-center">{team.played}</td>
