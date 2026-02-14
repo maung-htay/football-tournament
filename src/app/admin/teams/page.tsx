@@ -14,8 +14,12 @@ export default function TeamsPage() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [showBulkAdd, setShowBulkAdd] = useState(false);
   const [editingTeam, setEditingTeam] = useState<Team | null>(null);
   const [formData, setFormData] = useState({ name: '', shortName: '', logoUrl: '' });
+  const [bulkText, setBulkText] = useState('');
+  const [bulkAdding, setBulkAdding] = useState(false);
+  const [deletingAll, setDeletingAll] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -40,6 +44,8 @@ export default function TeamsPage() {
     setFormData({ name: '', shortName: '', logoUrl: '' });
     setEditingTeam(null);
     setShowForm(false);
+    setShowBulkAdd(false);
+    setBulkText('');
     setError('');
   };
 
@@ -51,6 +57,7 @@ export default function TeamsPage() {
       logoUrl: team.logoUrl || '',
     });
     setShowForm(true);
+    setShowBulkAdd(false);
     setError('');
     setSuccess('');
   };
@@ -85,7 +92,7 @@ export default function TeamsPage() {
         throw new Error(data.error || 'Failed to save team');
       }
 
-      setSuccess(editingTeam ? 'Team updated successfully' : 'Team registered successfully');
+      setSuccess(editingTeam ? 'Team updated' : 'Team added');
       resetForm();
       fetchTeams();
     } catch (error: any) {
@@ -93,16 +100,90 @@ export default function TeamsPage() {
     }
   };
 
+  // Bulk Add Teams
+  const handleBulkAdd = async () => {
+    if (!bulkText.trim()) {
+      setError('Please enter team names');
+      return;
+    }
+
+    setError('');
+    setSuccess('');
+    setBulkAdding(true);
+
+    const lines = bulkText.trim().split('\n').filter(line => line.trim());
+    let added = 0;
+    let failed = 0;
+
+    for (const line of lines) {
+      const parts = line.split(',').map(p => p.trim());
+      const name = parts[0];
+      const shortName = parts[1] || name.slice(0, 5).toUpperCase();
+
+      if (!name) continue;
+
+      try {
+        const res = await fetch('/api/teams', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, shortName }),
+        });
+
+        if (res.ok) {
+          added++;
+        } else {
+          failed++;
+        }
+      } catch (e) {
+        failed++;
+      }
+    }
+
+    setBulkAdding(false);
+    setBulkText('');
+    setShowBulkAdd(false);
+    fetchTeams();
+
+    if (failed > 0) {
+      setSuccess(`Added ${added} teams, ${failed} failed`);
+    } else {
+      setSuccess(`Added ${added} teams`);
+    }
+  };
+
+  // Delete single team
   const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
+    if (!confirm(`Delete "${name}"?`)) return;
 
     try {
       const res = await fetch(`/api/teams/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to delete');
-      setSuccess('Team deleted successfully');
+      setSuccess('Team deleted');
       fetchTeams();
     } catch (error) {
       setError('Failed to delete team');
+    }
+  };
+
+  // Delete ALL teams, groups, and matches
+  const handleDeleteAll = async () => {
+    if (!confirm('⚠️ Delete ALL teams, groups, and matches? This cannot be undone!')) return;
+    if (!confirm('Are you absolutely sure? Everything will be deleted!')) return;
+
+    setError('');
+    setSuccess('');
+    setDeletingAll(true);
+
+    try {
+      const res = await fetch('/api/teams/delete-all', { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete all');
+      
+      setSuccess('All teams, groups, and matches deleted');
+      fetchTeams();
+    } catch (error) {
+      setError('Failed to delete all');
+    } finally {
+      setDeletingAll(false);
     }
   };
 
@@ -115,189 +196,181 @@ export default function TeamsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-800">Team Management</h2>
-        <button
-          onClick={() => {
-            if (showForm) {
-              resetForm();
-            } else {
-              setShowForm(true);
-              setEditingTeam(null);
-              setFormData({ name: '', shortName: '', logoUrl: '' });
-            }
-          }}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
-        >
-          {showForm ? 'Cancel' : '+ Add Team'}
-        </button>
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-800">Team Management</h2>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <button
+            onClick={() => { setShowBulkAdd(!showBulkAdd); setShowForm(false); }}
+            className="flex-1 sm:flex-none bg-green-600 text-white px-3 py-2 rounded-lg text-sm"
+          >
+            📋 Bulk Add
+          </button>
+          <button
+            onClick={() => { setShowForm(!showForm); setShowBulkAdd(false); setEditingTeam(null); setFormData({ name: '', shortName: '', logoUrl: '' }); }}
+            className="flex-1 sm:flex-none bg-blue-600 text-white px-3 py-2 rounded-lg text-sm"
+          >
+            + Add
+          </button>
+          {teams.length > 0 && (
+            <button
+              onClick={handleDeleteAll}
+              disabled={deletingAll}
+              className="flex-1 sm:flex-none bg-red-600 text-white px-3 py-2 rounded-lg text-sm disabled:opacity-50"
+            >
+              {deletingAll ? '...' : '🗑️ Delete All'}
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Messages */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-          {error}
-        </div>
-      )}
-      {success && (
-        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg">
-          {success}
+      {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</div>}
+      {success && <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">{success}</div>}
+
+      {/* Bulk Add Form */}
+      {showBulkAdd && (
+        <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+          <h3 className="text-lg font-bold mb-2">📋 Bulk Add Teams</h3>
+          <p className="text-sm text-gray-600 mb-3">
+            Enter one team per line. Format: <code className="bg-gray-200 px-1 rounded">Team Name</code> or <code className="bg-gray-200 px-1 rounded">Team Name, SHORT</code>
+          </p>
+          <textarea
+            value={bulkText}
+            onChange={(e) => setBulkText(e.target.value)}
+            className="w-full border rounded-lg px-3 py-2 text-sm h-40 font-mono"
+            placeholder={`Tokyo United\nOsaka FC, OSK\nNagoya Stars\nKyoto Dragons, KYOTO`}
+          />
+          <div className="mt-3 flex gap-2">
+            <button
+              onClick={handleBulkAdd}
+              disabled={bulkAdding}
+              className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm disabled:opacity-50"
+            >
+              {bulkAdding ? 'Adding...' : 'Add All Teams'}
+            </button>
+            <button onClick={resetForm} className="bg-gray-300 px-4 py-2 rounded-lg text-sm">Cancel</button>
+          </div>
         </div>
       )}
 
-      {/* Add/Edit Form */}
+      {/* Single Add/Edit Form */}
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow p-6">
-          <h3 className="text-lg font-bold mb-4">
-            {editingTeam ? 'Edit Team' : 'Register New Team'}
-          </h3>
-          <div className="grid md:grid-cols-3 gap-4">
+        <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow p-4">
+          <h3 className="text-lg font-bold mb-3">{editingTeam ? 'Edit Team' : 'Add Team'}</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Team Name *
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Team Name *</label>
               <input
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full border rounded-lg px-3 py-2 text-sm"
                 placeholder="e.g. Tokyo United"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Short Name * (max 5)
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Short Name * (max 5)</label>
               <input
                 type="text"
                 value={formData.shortName}
                 onChange={(e) => setFormData({ ...formData, shortName: e.target.value.slice(0, 5).toUpperCase() })}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full border rounded-lg px-3 py-2 text-sm"
                 placeholder="e.g. TKY"
                 maxLength={5}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Logo URL (optional)
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Logo URL</label>
               <input
                 type="url"
                 value={formData.logoUrl}
                 onChange={(e) => setFormData({ ...formData, logoUrl: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="https://example.com/logo.png"
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+                placeholder="https://..."
               />
             </div>
           </div>
-          {formData.logoUrl && (
-            <div className="mt-4">
-              <p className="text-sm text-gray-500 mb-2">Logo Preview:</p>
-              <img 
-                src={formData.logoUrl} 
-                alt="Logo preview" 
-                className="w-16 h-16 object-contain border rounded"
-                onError={(e) => (e.currentTarget.style.display = 'none')}
-              />
-            </div>
-          )}
-          <div className="mt-4 flex gap-2">
-            <button
-              type="submit"
-              className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition"
-            >
-              {editingTeam ? 'Update' : 'Register'}
+          <div className="mt-3 flex gap-2">
+            <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm">
+              {editingTeam ? 'Update' : 'Add'}
             </button>
-            {editingTeam && (
-              <button
-                type="button"
-                onClick={resetForm}
-                className="bg-gray-300 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-400 transition"
-              >
-                Cancel
-              </button>
-            )}
+            <button type="button" onClick={resetForm} className="bg-gray-300 px-4 py-2 rounded-lg text-sm">Cancel</button>
           </div>
         </form>
       )}
 
-      {/* Teams List */}
-      <div className="bg-white rounded-xl shadow overflow-hidden">
+      {/* Mobile Card View */}
+      <div className="block sm:hidden space-y-3">
+        {teams.length === 0 ? (
+          <div className="bg-white rounded-xl p-6 text-center text-gray-500">No teams yet</div>
+        ) : teams.map((team) => (
+          <div key={team._id} className="bg-white rounded-xl shadow p-4">
+            <div className="flex items-center gap-3">
+              {team.logoUrl ? (
+                <img src={team.logoUrl} alt="" className="w-12 h-12 object-contain" />
+              ) : (
+                <div className="w-12 h-12 bg-gray-100 rounded flex items-center justify-center text-gray-400">⚽</div>
+              )}
+              <div className="flex-1">
+                <p className="font-bold">{team.name}</p>
+                <p className="text-sm text-gray-500">{team.shortName}</p>
+              </div>
+              {team.groupId && (
+                <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs">{(team.groupId as any).name}</span>
+              )}
+            </div>
+            <div className="mt-2 flex gap-2 justify-end">
+              <button onClick={() => handleEdit(team)} className="text-blue-600 text-sm">Edit</button>
+              <button onClick={() => handleDelete(team._id, team.name)} className="text-red-600 text-sm">Delete</button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop Table View */}
+      <div className="hidden sm:block bg-white rounded-xl shadow overflow-hidden">
         <table className="w-full">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Logo
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Team Name
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Short Name
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Group
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                Actions
-              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Logo</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Team Name</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Short</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Group</th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200">
+          <tbody className="divide-y">
             {teams.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
-                  No teams registered yet
+              <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-500">No teams yet</td></tr>
+            ) : teams.map((team) => (
+              <tr key={team._id} className="hover:bg-gray-50">
+                <td className="px-4 py-3">
+                  {team.logoUrl ? (
+                    <img src={team.logoUrl} alt="" className="w-10 h-10 object-contain" />
+                  ) : (
+                    <div className="w-10 h-10 bg-gray-100 rounded flex items-center justify-center text-gray-400">⚽</div>
+                  )}
+                </td>
+                <td className="px-4 py-3 font-medium">{team.name}</td>
+                <td className="px-4 py-3 text-gray-600">{team.shortName}</td>
+                <td className="px-4 py-3">
+                  {team.groupId ? (
+                    <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-sm">{(team.groupId as any).name}</span>
+                  ) : (
+                    <span className="text-gray-400">-</span>
+                  )}
+                </td>
+                <td className="px-4 py-3 text-right space-x-2">
+                  <button onClick={() => handleEdit(team)} className="text-blue-600 text-sm">Edit</button>
+                  <button onClick={() => handleDelete(team._id, team.name)} className="text-red-600 text-sm">Delete</button>
                 </td>
               </tr>
-            ) : (
-              teams.map((team) => (
-                <tr key={team._id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4">
-                    {team.logoUrl ? (
-                      <img src={team.logoUrl} alt="" className="w-10 h-10 object-contain" />
-                    ) : (
-                      <div className="w-10 h-10 bg-gray-200 rounded flex items-center justify-center text-gray-400">
-                        ⚽
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 font-medium text-gray-900">{team.name}</td>
-                  <td className="px-6 py-4 text-gray-600">{team.shortName}</td>
-                  <td className="px-6 py-4">
-                    {team.groupId ? (
-                      <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-sm">
-                        {(team.groupId as any).name || 'Assigned'}
-                      </span>
-                    ) : (
-                      <span className="text-gray-400">Unassigned</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-right space-x-2">
-                    <button
-                      onClick={() => handleEdit(team)}
-                      className="text-blue-600 hover:text-blue-800 text-sm"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDelete(team._id, team.name)}
-                      className="text-red-600 hover:text-red-800 text-sm"
-                    >
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              ))
-            )}
+            ))}
           </tbody>
         </table>
       </div>
 
-      <div className="text-sm text-gray-500">
-        Total Teams: {teams.length}
-      </div>
+      <div className="text-sm text-gray-500">Total: {teams.length} teams</div>
     </div>
   );
 }
