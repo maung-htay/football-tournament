@@ -299,8 +299,8 @@ export default function GroupsPage() {
               Click a team to add to <strong>{selectedGroup}</strong>. Click again to remove.
             </p>
 
-            {/* All Teams Grid */}
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+            {/* All Teams Grid - Show full team name */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
               {allTeams.map(team => {
                 const assignedGroup = getTeamGroup(team._id);
                 const isInSelectedGroup = assignedGroup === selectedGroup;
@@ -309,7 +309,7 @@ export default function GroupsPage() {
                   <button
                     key={team._id}
                     onClick={() => handleTeamClick(team._id)}
-                    className={`p-2 rounded-lg border-2 transition text-center ${
+                    className={`p-3 rounded-lg border-2 transition text-left ${
                       isInSelectedGroup
                         ? 'border-green-500 bg-green-50'
                         : assignedGroup
@@ -317,14 +317,9 @@ export default function GroupsPage() {
                         : 'border-gray-200 hover:border-green-400 hover:bg-green-50'
                     }`}
                   >
-                    {team.logoUrl ? (
-                      <img src={team.logoUrl} alt="" className="w-8 h-8 mx-auto mb-1 object-contain" />
-                    ) : (
-                      <div className="w-8 h-8 mx-auto mb-1 bg-gray-200 rounded-full flex items-center justify-center text-xs font-bold">{team.shortName.slice(0, 2)}</div>
-                    )}
-                    <p className="text-xs font-medium truncate">{team.shortName}</p>
+                    <p className="text-sm font-medium truncate">{team.name}</p>
                     {assignedGroup && (
-                      <p className="text-[10px] text-gray-500">{assignedGroup.replace('Group ', '')}</p>
+                      <p className="text-xs text-gray-500 mt-1">{assignedGroup}</p>
                     )}
                   </button>
                 );
@@ -332,7 +327,7 @@ export default function GroupsPage() {
             </div>
           </div>
 
-          {/* Preview Groups */}
+          {/* Preview Groups - Show full team name */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {Object.entries(manualGroups).map(([groupName, teamIds]) => (
               <div 
@@ -349,11 +344,8 @@ export default function GroupsPage() {
                   {teamIds.map(teamId => {
                     const team = allTeams.find(t => t._id === teamId);
                     return team ? (
-                      <div key={teamId} className="flex items-center gap-1 text-xs bg-gray-50 rounded px-2 py-1">
-                        {team.logoUrl ? (
-                          <img src={team.logoUrl} alt="" className="w-4 h-4 object-contain" />
-                        ) : null}
-                        <span>{team.shortName}</span>
+                      <div key={teamId} className="text-xs bg-gray-50 rounded px-2 py-1 truncate">
+                        {team.name}
                       </div>
                     ) : null;
                   })}
@@ -372,7 +364,7 @@ export default function GroupsPage() {
         </div>
       )}
 
-      {/* Edit Group Modal */}
+      {/* Edit Group Modal - Show full team name */}
       {editMode && editingGroup && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl p-4 max-w-lg w-full max-h-[80vh] overflow-y-auto">
@@ -388,8 +380,7 @@ export default function GroupsPage() {
                   <input type="checkbox" checked={selectedTeams.includes(team._id)} onChange={() => {
                     setSelectedTeams(prev => prev.includes(team._id) ? prev.filter(id => id !== team._id) : [...prev, team._id]);
                   }} className="w-4 h-4" />
-                  {team.logoUrl && <img src={team.logoUrl} alt="" className="w-6 h-6 object-contain" />}
-                  <span className="font-medium">{team.shortName}</span>
+                  <span className="font-medium">{team.name}</span>
                 </label>
               ))}
             </div>
@@ -401,9 +392,9 @@ export default function GroupsPage() {
         </div>
       )}
 
-      {/* Existing Groups Display */}
+      {/* Existing Groups Display - Show full team name */}
       {groups.length > 0 && !manualMode && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {groups.map((group) => (
             <div key={group._id} className="bg-white rounded-xl shadow overflow-hidden">
               <div className="bg-green-600 text-white px-3 py-2 flex justify-between items-center">
@@ -413,13 +404,8 @@ export default function GroupsPage() {
               <ul className="divide-y">
                 {group.teams.map((team, idx) => (
                   <li key={team._id} className="px-3 py-2 flex items-center text-sm">
-                    <span className="w-5 h-5 bg-gray-200 rounded-full flex items-center justify-center text-xs mr-2">{idx + 1}</span>
-                    {team.logoUrl ? (
-                      <img src={team.logoUrl} alt="" className="w-6 h-6 object-contain mr-2" />
-                    ) : (
-                      <span className="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center text-[8px] font-bold mr-2">{team.shortName.slice(0, 2)}</span>
-                    )}
-                    <span className="font-medium">{team.shortName}</span>
+                    <span className="w-5 h-5 bg-gray-200 rounded-full flex items-center justify-center text-xs mr-2 flex-shrink-0">{idx + 1}</span>
+                    <span className="font-medium truncate">{team.name}</span>
                   </li>
                 ))}
               </ul>

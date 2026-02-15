@@ -41,6 +41,7 @@ export default function MatchesPage() {
   const [showBracket, setShowBracket] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [resolving, setResolving] = useState(false);
   const [editingMatch, setEditingMatch] = useState<Match | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -306,6 +307,32 @@ export default function MatchesPage() {
   };
 
   const hasKnockoutMatches = Object.values(matchesByRound).some(arr => arr.length > 0);
+  
+  // Check if there are unresolved placeholders
+  const hasUnresolvedPlaceholders = matches.some(m => 
+    (m.homePlaceholder && !m.homeTeam) || (m.awayPlaceholder && !m.awayTeam)
+  );
+
+  // Resolve placeholders
+  const handleResolvePlaceholders = async () => {
+    setError('');
+    setSuccess('');
+    setResolving(true);
+
+    try {
+      const res = await fetch('/api/matches/resolve-placeholders', { method: 'POST' });
+      const data = await res.json();
+      
+      if (!res.ok) throw new Error(data.error || 'Failed to resolve');
+      
+      setSuccess(data.message || 'Placeholders resolved');
+      fetchData();
+    } catch (error: any) {
+      setError(error.message);
+    } finally {
+      setResolving(false);
+    }
+  };
 
   if (loading) return <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-800"></div></div>;
 
@@ -313,9 +340,18 @@ export default function MatchesPage() {
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
         <h2 className="text-xl sm:text-2xl font-bold text-gray-800">Match Management</h2>
-        <div className="flex gap-2 w-full sm:w-auto">
+        <div className="flex gap-2 w-full sm:w-auto flex-wrap">
           <button onClick={() => { setShowGenerate(!showGenerate); setShowForm(false); }} className="flex-1 sm:flex-none bg-green-600 text-white px-3 py-2 rounded-lg text-sm">⚡ Auto</button>
           <button onClick={handleAddNew} className="flex-1 sm:flex-none bg-blue-600 text-white px-3 py-2 rounded-lg text-sm">+ Add</button>
+          {hasUnresolvedPlaceholders && (
+            <button 
+              onClick={handleResolvePlaceholders} 
+              disabled={resolving}
+              className="flex-1 sm:flex-none bg-purple-600 text-white px-3 py-2 rounded-lg text-sm disabled:opacity-50"
+            >
+              {resolving ? '...' : '🔄 Resolve Teams'}
+            </button>
+          )}
         </div>
       </div>
 
