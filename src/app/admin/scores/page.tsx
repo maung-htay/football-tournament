@@ -11,29 +11,37 @@ interface Team {
 
 interface Match {
   _id: string;
-  homeTeam: Team;
-  awayTeam: Team;
+  homeTeam?: Team;
+  awayTeam?: Team;
+  homePlaceholder?: string;
+  awayPlaceholder?: string;
   homeScore: number | null;
   awayScore: number | null;
   groupId?: { name: string };
   round: string;
+  matchName?: string;
   venue: string;
   matchDate: string;
   matchTime: string;
   status: string;
 }
 
-const TeamDisplay = ({ team }: { team: Team | null }) => {
-  if (!team) return <span className="text-gray-400">TBD</span>;
-  
-  return (
-    <div className="flex flex-col items-center text-center">
-      {team.logoUrl && (
-        <img src={team.logoUrl} alt={team.name} className="w-10 h-10 sm:w-12 sm:h-12 object-contain mb-1" />
-      )}
-      <p className="font-bold text-sm sm:text-base leading-tight">{team.name}</p>
-    </div>
-  );
+const TeamDisplay = ({ team, placeholder }: { team?: Team | null; placeholder?: string }) => {
+  if (team) {
+    return (
+      <div className="flex flex-col items-center text-center">
+        <p className="font-bold text-sm sm:text-base leading-tight">{team.name}</p>
+      </div>
+    );
+  }
+  if (placeholder) {
+    return (
+      <div className="flex flex-col items-center text-center">
+        <p className="font-medium text-sm sm:text-base text-gray-500">{placeholder}</p>
+      </div>
+    );
+  }
+  return <span className="text-gray-400">TBD</span>;
 };
 
 export default function ScoresPage() {
@@ -124,7 +132,15 @@ export default function ScoresPage() {
   const formatDate = (dateStr: string) => new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
   const getRoundLabel = (round: string) => {
-    const labels: Record<string, string> = { group: 'Group', round32: 'R32', round16: 'R16', quarter: 'QF', semi: 'SF', third: '3rd', final: 'Final' };
+    const labels: Record<string, string> = { 
+      group: 'Group Stage', 
+      round32: 'Round of 32', 
+      round16: 'Round of 16', 
+      quarter: 'Quarter Final', 
+      semi: 'Semi Final', 
+      third: '3rd Place', 
+      final: 'Final' 
+    };
     return labels[round] || round;
   };
 
@@ -172,8 +188,16 @@ export default function ScoresPage() {
         ) : (
           filteredMatches.map((match) => (
             <div key={match._id} className={`bg-white rounded-xl shadow overflow-hidden ${match.status === 'live' ? 'ring-2 ring-red-400' : ''}`}>
+              {/* Header with Date, Time, Venue, Round/Stage */}
               <div className="bg-gray-50 px-3 sm:px-4 py-2 flex justify-between items-center text-xs sm:text-sm">
-                <span className="text-gray-600">{formatDate(match.matchDate)} {match.matchTime} | {match.venue}</span>
+                <div className="flex items-center gap-2 text-gray-600">
+                  <span>{formatDate(match.matchDate)} {match.matchTime}</span>
+                  <span>|</span>
+                  <span>{match.venue}</span>
+                  <span>|</span>
+                  <span className="font-medium text-green-600">{getRoundLabel(match.round)}</span>
+                  {match.matchName && <span className="text-gray-500">({match.matchName})</span>}
+                </div>
                 <span className={`px-2 py-1 rounded text-xs font-medium ${
                   match.status === 'live' ? 'bg-red-100 text-red-800 animate-pulse' :
                   match.status === 'completed' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
@@ -185,8 +209,8 @@ export default function ScoresPage() {
               <div className="p-3 sm:p-4">
                 {editingMatch === match._id ? (
                   <div className="flex items-center justify-center gap-3 sm:gap-4">
-                    <div className="text-center">
-                      <TeamDisplay team={match.homeTeam} />
+                    <div className="text-center flex-1">
+                      <TeamDisplay team={match.homeTeam} placeholder={match.homePlaceholder} />
                       <input
                         type="number"
                         min="0"
@@ -196,8 +220,8 @@ export default function ScoresPage() {
                       />
                     </div>
                     <span className="text-xl sm:text-2xl text-gray-400">-</span>
-                    <div className="text-center">
-                      <TeamDisplay team={match.awayTeam} />
+                    <div className="text-center flex-1">
+                      <TeamDisplay team={match.awayTeam} placeholder={match.awayPlaceholder} />
                       <input
                         type="number"
                         min="0"
@@ -210,7 +234,7 @@ export default function ScoresPage() {
                 ) : (
                   <div className="flex items-center justify-center">
                     <div className="flex-1 text-center">
-                      <TeamDisplay team={match.homeTeam} />
+                      <TeamDisplay team={match.homeTeam} placeholder={match.homePlaceholder} />
                     </div>
                     <div className="px-3 sm:px-6">
                       {match.status === 'completed' || match.status === 'live' ? (
@@ -221,7 +245,7 @@ export default function ScoresPage() {
                       {match.status === 'live' && <p className="text-red-500 text-xs font-medium animate-pulse text-center mt-1">● LIVE</p>}
                     </div>
                     <div className="flex-1 text-center">
-                      <TeamDisplay team={match.awayTeam} />
+                      <TeamDisplay team={match.awayTeam} placeholder={match.awayPlaceholder} />
                     </div>
                   </div>
                 )}
@@ -230,7 +254,7 @@ export default function ScoresPage() {
                   {match.status === 'scheduled' && (
                     <button
                       onClick={() => handleStartMatch(match._id)}
-                      disabled={updating === match._id}
+                      disabled={updating === match._id || !match.homeTeam || !match.awayTeam}
                       className="bg-green-600 text-white px-4 sm:px-6 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 text-sm"
                     >
                       {updating === match._id ? 'Starting...' : '▶️ Start Match'}

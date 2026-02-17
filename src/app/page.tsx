@@ -40,7 +40,7 @@ interface Match {
   status: string;
 }
 
-// Team display component - uses full name only, no logo
+// Team display component - uses full name only
 const TeamDisplay = ({ team, placeholder }: { team?: Team | null; placeholder?: string }) => {
   if (team) {
     return (
@@ -65,7 +65,7 @@ export default function Home() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
-  const [activeTab, setActiveTab] = useState<'matches' | 'standings'>('matches');
+  const [activeTab, setActiveTab] = useState<'matches' | 'standings' | 'bracket'>('matches');
   const [matchFilter, setMatchFilter] = useState<'live' | 'fixtures' | 'completed'>('fixtures');
   const [teamFilter, setTeamFilter] = useState<string>('all');
   const [loading, setLoading] = useState(true);
@@ -164,6 +164,26 @@ export default function Home() {
 
   const liveCount = matches.filter(m => m.status === 'live').length;
 
+  // Knockout bracket data
+  const matchesByRound = {
+    round32: matches.filter(m => m.round === 'round32'),
+    round16: matches.filter(m => m.round === 'round16'),
+    quarter: matches.filter(m => m.round === 'quarter'),
+    semi: matches.filter(m => m.round === 'semi'),
+    third: matches.filter(m => m.round === 'third'),
+    final: matches.filter(m => m.round === 'final'),
+  };
+
+  const hasKnockoutMatches = Object.values(matchesByRound).some(arr => arr.length > 0);
+
+  const getTeamDisplayText = (match: Match, side: 'home' | 'away') => {
+    const team = side === 'home' ? match.homeTeam : match.awayTeam;
+    const placeholder = side === 'home' ? match.homePlaceholder : match.awayPlaceholder;
+    if (team) return team.name;
+    if (placeholder) return placeholder;
+    return 'TBD';
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -190,7 +210,7 @@ export default function Home() {
 
       {/* Main Tab Navigation */}
       <div className="max-w-6xl mx-auto px-3 sm:px-4 mt-4 sm:mt-6">
-        <div className="flex space-x-2 bg-white rounded-lg p-1 shadow">
+        <div className="flex space-x-1 sm:space-x-2 bg-white rounded-lg p-1 shadow">
           <button
             onClick={() => setActiveTab('matches')}
             className={`flex-1 py-2 sm:py-3 px-2 sm:px-4 rounded-lg font-medium transition text-sm sm:text-base ${
@@ -207,6 +227,16 @@ export default function Home() {
           >
             📊 Standings
           </button>
+          {hasKnockoutMatches && (
+            <button
+              onClick={() => setActiveTab('bracket')}
+              className={`flex-1 py-2 sm:py-3 px-2 sm:px-4 rounded-lg font-medium transition text-sm sm:text-base ${
+                activeTab === 'bracket' ? 'bg-green-600 text-white' : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              🏆 Bracket
+            </button>
+          )}
         </div>
       </div>
 
@@ -325,7 +355,7 @@ export default function Home() {
               ))
             )}
           </div>
-        ) : (
+        ) : activeTab === 'standings' ? (
           /* Standings Tab */
           <div className="grid gap-4 sm:gap-6 md:grid-cols-2">
             {groups.length === 0 ? (
@@ -386,6 +416,94 @@ export default function Home() {
                 </div>
               ))
             )}
+          </div>
+        ) : (
+          /* Bracket Tab */
+          <div className="bg-white rounded-xl shadow p-4 overflow-x-auto">
+            <h3 className="text-lg font-bold mb-4 text-center">🏆 Knockout Stage</h3>
+            <div className="flex gap-6 min-w-max justify-center">
+              {(['round32', 'round16', 'quarter', 'semi', 'final'] as const).map(round => {
+                const roundMatches = matchesByRound[round];
+                if (roundMatches.length === 0) return null;
+                
+                return (
+                  <div key={round} className="flex flex-col gap-4">
+                    <h4 className="text-sm font-bold text-center text-gray-600 border-b pb-2">
+                      {getRoundLabel(round)}
+                    </h4>
+                    {roundMatches.map(match => (
+                      <div 
+                        key={match._id} 
+                        className={`rounded-lg p-3 w-52 border-l-4 ${
+                          match.status === 'completed' ? 'bg-green-50 border-green-500' :
+                          match.status === 'live' ? 'bg-red-50 border-red-500' :
+                          'bg-gray-50 border-gray-300'
+                        }`}
+                      >
+                        {match.matchName && <p className="text-xs text-gray-500 mb-1">{match.matchName}</p>}
+                        <div className={`text-sm font-medium flex justify-between ${
+                          match.status === 'completed' && match.homeScore! > match.awayScore! ? 'text-green-700' : ''
+                        }`}>
+                          <span className="truncate flex-1">{getTeamDisplayText(match, 'home')}</span>
+                          {(match.status === 'completed' || match.status === 'live') && (
+                            <span className="font-bold ml-2">{match.homeScore}</span>
+                          )}
+                        </div>
+                        <div className={`text-sm font-medium flex justify-between ${
+                          match.status === 'completed' && match.awayScore! > match.homeScore! ? 'text-green-700' : ''
+                        }`}>
+                          <span className="truncate flex-1">{getTeamDisplayText(match, 'away')}</span>
+                          {(match.status === 'completed' || match.status === 'live') && (
+                            <span className="font-bold ml-2">{match.awayScore}</span>
+                          )}
+                        </div>
+                        <div className="text-xs text-gray-400 mt-2 flex justify-between">
+                          <span>{match.venue}</span>
+                          <span>{match.matchTime}</span>
+                        </div>
+                        {match.status === 'live' && (
+                          <p className="text-xs text-red-500 font-medium animate-pulse mt-1">● LIVE</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+              
+              {/* 3rd Place */}
+              {matchesByRound.third.length > 0 && (
+                <div className="flex flex-col gap-4">
+                  <h4 className="text-sm font-bold text-center text-gray-600 border-b pb-2">3rd Place</h4>
+                  {matchesByRound.third.map(match => (
+                    <div 
+                      key={match._id} 
+                      className={`rounded-lg p-3 w-52 border-l-4 ${
+                        match.status === 'completed' ? 'bg-amber-50 border-amber-500' :
+                        match.status === 'live' ? 'bg-red-50 border-red-500' :
+                        'bg-gray-50 border-gray-300'
+                      }`}
+                    >
+                      <div className="text-sm font-medium flex justify-between">
+                        <span className="truncate flex-1">{getTeamDisplayText(match, 'home')}</span>
+                        {(match.status === 'completed' || match.status === 'live') && (
+                          <span className="font-bold ml-2">{match.homeScore}</span>
+                        )}
+                      </div>
+                      <div className="text-sm font-medium flex justify-between">
+                        <span className="truncate flex-1">{getTeamDisplayText(match, 'away')}</span>
+                        {(match.status === 'completed' || match.status === 'live') && (
+                          <span className="font-bold ml-2">{match.awayScore}</span>
+                        )}
+                      </div>
+                      <div className="text-xs text-gray-400 mt-2 flex justify-between">
+                        <span>{match.venue}</span>
+                        <span>{match.matchTime}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

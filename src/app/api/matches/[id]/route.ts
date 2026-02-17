@@ -46,48 +46,51 @@ export async function PUT(
       if (body.awayScore === undefined) body.awayScore = 0;
     }
 
-    // Handle status change to completed - update team stats
+    // Handle status change to completed - update team stats ONLY for group matches
     if (body.status === 'completed' && body.homeScore !== undefined && body.awayScore !== undefined) {
-      const homeTeam = await Team.findById(existingMatch.homeTeam);
-      const awayTeam = await Team.findById(existingMatch.awayTeam);
+      // Only update team stats for group stage matches
+      const isGroupMatch = existingMatch.round === 'group';
+      
+      if (isGroupMatch) {
+        const homeTeam = await Team.findById(existingMatch.homeTeam);
+        const awayTeam = await Team.findById(existingMatch.awayTeam);
 
-      if (homeTeam && awayTeam) {
-        // If match was already completed, reverse previous stats
-        if (existingMatch.status === 'completed' && existingMatch.homeScore !== null) {
-          const prevHomeScore = existingMatch.homeScore;
-          const prevAwayScore = existingMatch.awayScore;
+        if (homeTeam && awayTeam) {
+          // If match was already completed, reverse previous stats
+          if (existingMatch.status === 'completed' && existingMatch.homeScore !== null) {
+            const prevHomeScore = existingMatch.homeScore;
+            const prevAwayScore = existingMatch.awayScore;
 
-          homeTeam.played -= 1;
-          homeTeam.goalsFor -= prevHomeScore;
-          homeTeam.goalsAgainst -= prevAwayScore;
-          
-          if (prevHomeScore > prevAwayScore) {
-            homeTeam.won -= 1;
-            homeTeam.points -= 3;
-          } else if (prevHomeScore < prevAwayScore) {
-            homeTeam.lost -= 1;
-          } else {
-            homeTeam.drawn -= 1;
-            homeTeam.points -= 1;
+            homeTeam.played -= 1;
+            homeTeam.goalsFor -= prevHomeScore;
+            homeTeam.goalsAgainst -= prevAwayScore;
+            
+            if (prevHomeScore > prevAwayScore) {
+              homeTeam.won -= 1;
+              homeTeam.points -= 3;
+            } else if (prevHomeScore < prevAwayScore) {
+              homeTeam.lost -= 1;
+            } else {
+              homeTeam.drawn -= 1;
+              homeTeam.points -= 1;
+            }
+
+            awayTeam.played -= 1;
+            awayTeam.goalsFor -= prevAwayScore;
+            awayTeam.goalsAgainst -= prevHomeScore;
+            
+            if (prevAwayScore > prevHomeScore) {
+              awayTeam.won -= 1;
+              awayTeam.points -= 3;
+            } else if (prevAwayScore < prevHomeScore) {
+              awayTeam.lost -= 1;
+            } else {
+              awayTeam.drawn -= 1;
+              awayTeam.points -= 1;
+            }
           }
 
-          awayTeam.played -= 1;
-          awayTeam.goalsFor -= prevAwayScore;
-          awayTeam.goalsAgainst -= prevHomeScore;
-          
-          if (prevAwayScore > prevHomeScore) {
-            awayTeam.won -= 1;
-            awayTeam.points -= 3;
-          } else if (prevAwayScore < prevHomeScore) {
-            awayTeam.lost -= 1;
-          } else {
-            awayTeam.drawn -= 1;
-            awayTeam.points -= 1;
-          }
-        }
-
-        // Apply new stats only if completing the match
-        if (body.status === 'completed') {
+          // Apply new stats
           const newHomeScore = body.homeScore;
           const newAwayScore = body.awayScore;
 
@@ -114,12 +117,12 @@ export async function PUT(
             awayTeam.points += 1;
           }
 
-          body.completedAt = new Date();
+          await homeTeam.save();
+          await awayTeam.save();
         }
-
-        await homeTeam.save();
-        await awayTeam.save();
       }
+      
+      body.completedAt = new Date();
     }
 
     const match = await Match.findByIdAndUpdate(params.id, body, { new: true })

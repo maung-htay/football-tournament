@@ -104,8 +104,10 @@ export async function POST() {
       }
     }
 
-    // Find all matches with placeholders
-    const matchesWithPlaceholders = await Match.find({
+    // Find all knockout matches with placeholders (even if team already assigned)
+    const knockoutMatches = await Match.find({
+      round: { $ne: 'group' },
+      status: { $ne: 'completed' }, // Only update matches that haven't been played yet
       $or: [
         { homePlaceholder: { $exists: true, $ne: null, $ne: '' } },
         { awayPlaceholder: { $exists: true, $ne: null, $ne: '' } },
@@ -114,26 +116,36 @@ export async function POST() {
 
     let resolved = 0;
 
-    for (const match of matchesWithPlaceholders) {
+    for (const match of knockoutMatches) {
       let updated = false;
 
-      // Resolve home placeholder
-      if (match.homePlaceholder && !match.homeTeam) {
+      // Resolve home placeholder - always update based on current standings
+      if (match.homePlaceholder) {
         const team = resolvePlaceholder(match.homePlaceholder, groupStandings, matchWinners, matchLosers);
         if (team) {
-          match.homeTeam = team._id;
-          match.homePlaceholder = null;
-          updated = true;
+          const newTeamId = team._id.toString();
+          const currentTeamId = match.homeTeam?.toString();
+          
+          // Update if team changed or not set
+          if (newTeamId !== currentTeamId) {
+            match.homeTeam = team._id;
+            updated = true;
+          }
         }
       }
 
-      // Resolve away placeholder
-      if (match.awayPlaceholder && !match.awayTeam) {
+      // Resolve away placeholder - always update based on current standings
+      if (match.awayPlaceholder) {
         const team = resolvePlaceholder(match.awayPlaceholder, groupStandings, matchWinners, matchLosers);
         if (team) {
-          match.awayTeam = team._id;
-          match.awayPlaceholder = null;
-          updated = true;
+          const newTeamId = team._id.toString();
+          const currentTeamId = match.awayTeam?.toString();
+          
+          // Update if team changed or not set
+          if (newTeamId !== currentTeamId) {
+            match.awayTeam = team._id;
+            updated = true;
+          }
         }
       }
 
@@ -146,7 +158,7 @@ export async function POST() {
     return NextResponse.json({ 
       success: true, 
       resolved,
-      message: `Resolved ${resolved} placeholders` 
+      message: resolved > 0 ? `Updated ${resolved} matches` : 'All teams are up to date'
     });
   } catch (error) {
     console.error('Failed to resolve placeholders:', error);

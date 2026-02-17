@@ -23,10 +23,10 @@ export async function POST() {
       points: 0,
     });
 
-    // Delete group stage matches
-    await Match.deleteMany({ round: 'group' });
+    // Delete ALL matches (group + knockout)
+    await Match.deleteMany({});
 
-    return NextResponse.json({ message: 'Groups reset successfully' });
+    return NextResponse.json({ message: 'Groups and all matches reset successfully' });
   } catch (error) {
     console.error(error);
     return NextResponse.json({ error: 'Failed to reset groups' }, { status: 500 });
