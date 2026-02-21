@@ -109,8 +109,8 @@ export async function POST() {
       round: { $ne: 'group' },
       status: { $ne: 'completed' }, // Only update matches that haven't been played yet
       $or: [
-        { homePlaceholder: { $exists: true, $ne: null, $ne: '' } },
-        { awayPlaceholder: { $exists: true, $ne: null, $ne: '' } },
+        { homePlaceholder: { $exists: true, $nin: [null, ''] } },
+        { awayPlaceholder: { $exists: true, $nin: [null, ''] } },
       ],
     });
 
