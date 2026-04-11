@@ -70,13 +70,25 @@ export async function POST() {
         }
       }
 
-      // Sort by points, then goal difference, then goals for
+      // Sort by points, GD, GF first - then manualRank only when all are equal
       const sorted = Object.values(teamStats).sort((a, b) => {
+        // 1. Sort by points first
         if (b.points !== a.points) return b.points - a.points;
+        
+        // 2. Then goal difference
         const gdA = a.goalsFor - a.goalsAgainst;
         const gdB = b.goalsFor - b.goalsAgainst;
         if (gdB !== gdA) return gdB - gdA;
-        return b.goalsFor - a.goalsFor;
+        
+        // 3. Then goals for
+        if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor;
+        
+        // 4. If all equal, use manualRank (tiebreaker)
+        if (a.team.manualRank && b.team.manualRank) return a.team.manualRank - b.team.manualRank;
+        if (a.team.manualRank) return -1;
+        if (b.team.manualRank) return 1;
+        
+        return 0;
       });
 
       groupStandings[group.name] = sorted;

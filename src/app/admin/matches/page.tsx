@@ -22,6 +22,8 @@ interface Match {
   awayPlaceholder?: string;
   homeScore: number | null;
   awayScore: number | null;
+  homePenalty?: number | null;
+  awayPenalty?: number | null;
   groupId?: Group;
   round: string;
   matchName?: string;
@@ -72,6 +74,9 @@ export default function MatchesPage() {
 
   useEffect(() => {
     fetchData();
+    // Auto refresh every 30 seconds
+    const interval = setInterval(fetchData, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   const fetchData = async () => {
@@ -334,6 +339,14 @@ export default function MatchesPage() {
     }
   };
 
+  // Sort matches - live first, then scheduled, then completed
+  const sortedMatches = [...matches].sort((a, b) => {
+    const statusOrder: Record<string, number> = { live: 0, scheduled: 1, completed: 2, cancelled: 3 };
+    const statusDiff = statusOrder[a.status] - statusOrder[b.status];
+    if (statusDiff !== 0) return statusDiff;
+    return new Date(a.matchDate).getTime() - new Date(b.matchDate).getTime();
+  });
+
   if (loading) return <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-800"></div></div>;
 
   return (
@@ -347,9 +360,19 @@ export default function MatchesPage() {
             <button 
               onClick={handleResolvePlaceholders} 
               disabled={resolving}
-              className="flex-1 sm:flex-none bg-purple-600 text-white px-3 py-2 rounded-lg text-sm disabled:opacity-50"
+              className={`flex-1 sm:flex-none bg-purple-600 text-white px-3 py-2 rounded-lg text-sm disabled:opacity-50 transition-all ${
+                resolving ? 'animate-pulse scale-105' : 'hover:bg-purple-700'
+              }`}
             >
-              {resolving ? '...' : '🔄 Resolve Teams'}
+              {resolving ? (
+                <span className="flex items-center gap-2">
+                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                  </svg>
+                  Resolving...
+                </span>
+              ) : '🔄 Resolve Teams'}
             </button>
           )}
         </div>
@@ -516,20 +539,47 @@ export default function MatchesPage() {
                   <h4 className="text-sm font-bold text-center text-gray-600 border-b pb-2">
                     {getRoundLabel(round)}
                   </h4>
-                  {roundMatches.map(match => (
-                    <div key={match._id} className="bg-gray-50 rounded-lg p-3 w-48 border-l-4 border-green-500">
-                      {match.matchName && <p className="text-xs text-gray-500 mb-1">{match.matchName}</p>}
-                      <div className={`text-sm font-medium ${match.status === 'completed' && match.homeScore! > match.awayScore! ? 'text-green-600' : ''}`}>
-                        {getTeamDisplay(match, 'home')}
-                        {match.status === 'completed' && <span className="float-right">{match.homeScore}</span>}
+                  {roundMatches.map(match => {
+                    const hasPenalty = match.homePenalty !== null && match.homePenalty !== undefined;
+                    const homeWinsPen = hasPenalty && match.homePenalty! > match.awayPenalty!;
+                    const awayWinsPen = hasPenalty && match.awayPenalty! > match.homePenalty!;
+                    const homeWins = match.status === 'completed' && (
+                      match.homeScore! > match.awayScore! || 
+                      (match.homeScore === match.awayScore && homeWinsPen)
+                    );
+                    const awayWins = match.status === 'completed' && (
+                      match.awayScore! > match.homeScore! ||
+                      (match.homeScore === match.awayScore && awayWinsPen)
+                    );
+                    
+                    return (
+                      <div key={match._id} className="bg-gray-50 rounded-lg p-3 w-52 border-l-4 border-green-500">
+                        {match.matchName && <p className="text-xs text-gray-500 mb-1">{match.matchName}</p>}
+                        <div className={`text-sm font-medium flex justify-between ${homeWins ? 'text-green-600' : ''}`}>
+                          <span>{getTeamDisplay(match, 'home')}</span>
+                          {match.status === 'completed' && (
+                            <span>
+                              {match.homeScore}
+                              {hasPenalty && <span className="text-purple-600 text-xs ml-1">({match.homePenalty})</span>}
+                            </span>
+                          )}
+                        </div>
+                        <div className={`text-sm font-medium flex justify-between ${awayWins ? 'text-green-600' : ''}`}>
+                          <span>{getTeamDisplay(match, 'away')}</span>
+                          {match.status === 'completed' && (
+                            <span>
+                              {match.awayScore}
+                              {hasPenalty && <span className="text-purple-600 text-xs ml-1">({match.awayPenalty})</span>}
+                            </span>
+                          )}
+                        </div>
+                        {hasPenalty && (
+                          <p className="text-xs text-purple-600 text-center mt-1">PEN: {match.homePenalty} - {match.awayPenalty}</p>
+                        )}
+                        <p className="text-xs text-gray-400 mt-1">{match.venue} | {match.matchTime}</p>
                       </div>
-                      <div className={`text-sm font-medium ${match.status === 'completed' && match.awayScore! > match.homeScore! ? 'text-green-600' : ''}`}>
-                        {getTeamDisplay(match, 'away')}
-                        {match.status === 'completed' && <span className="float-right">{match.awayScore}</span>}
-                      </div>
-                      <p className="text-xs text-gray-400 mt-1">{match.venue} | {match.matchTime}</p>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               );
             })}
@@ -538,12 +588,22 @@ export default function MatchesPage() {
             {matchesByRound.third.length > 0 && (
               <div className="flex flex-col gap-4">
                 <h4 className="text-sm font-bold text-center text-gray-600 border-b pb-2">3rd Place</h4>
-                {matchesByRound.third.map(match => (
-                  <div key={match._id} className="bg-amber-50 rounded-lg p-3 w-48 border-l-4 border-amber-500">
-                    <div className="text-sm font-medium">{getTeamDisplay(match, 'home')}</div>
-                    <div className="text-sm font-medium">{getTeamDisplay(match, 'away')}</div>
-                  </div>
-                ))}
+                {matchesByRound.third.map(match => {
+                  const hasPenalty = match.homePenalty !== null && match.homePenalty !== undefined;
+                  return (
+                    <div key={match._id} className="bg-amber-50 rounded-lg p-3 w-52 border-l-4 border-amber-500">
+                      <div className="text-sm font-medium flex justify-between">
+                        <span>{getTeamDisplay(match, 'home')}</span>
+                        {match.status === 'completed' && <span>{match.homeScore}{hasPenalty && <span className="text-purple-600 text-xs ml-1">({match.homePenalty})</span>}</span>}
+                      </div>
+                      <div className="text-sm font-medium flex justify-between">
+                        <span>{getTeamDisplay(match, 'away')}</span>
+                        {match.status === 'completed' && <span>{match.awayScore}{hasPenalty && <span className="text-purple-600 text-xs ml-1">({match.awayPenalty})</span>}</span>}
+                      </div>
+                      {hasPenalty && <p className="text-xs text-purple-600 text-center mt-1">PEN</p>}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -555,9 +615,9 @@ export default function MatchesPage() {
         <>
           {/* Mobile Cards */}
           <div className="block sm:hidden space-y-3">
-            {matches.length === 0 ? (
+            {sortedMatches.length === 0 ? (
               <div className="bg-white rounded-xl p-6 text-center text-gray-500">No matches yet</div>
-            ) : matches.map((match) => (
+            ) : sortedMatches.map((match) => (
               <div key={match._id} className={`bg-white rounded-xl shadow p-4 ${match.status === 'cancelled' ? 'opacity-50' : ''}`}>
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-xs text-gray-500">{formatDate(match.matchDate)} {match.matchTime}</span>
@@ -603,9 +663,9 @@ export default function MatchesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {matches.length === 0 ? (
+                {sortedMatches.length === 0 ? (
                   <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-500">No matches yet</td></tr>
-                ) : matches.map((match) => (
+                ) : sortedMatches.map((match) => (
                   <tr key={match._id} className={`hover:bg-gray-50 ${match.status === 'cancelled' ? 'opacity-50' : ''}`}>
                     <td className="px-4 py-3">
                       <div className="text-sm">{formatDate(match.matchDate)}</div>

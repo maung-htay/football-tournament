@@ -14,6 +14,7 @@ interface Team {
   goalsFor: number;
   goalsAgainst: number;
   points: number;
+  manualRank?: number;
 }
 
 interface Group {
@@ -101,20 +102,34 @@ export default function StandingsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {group.teams
+                    {[...group.teams]
                       .sort((a, b) => {
+                        // 1. Sort by points first
                         if (b.points !== a.points) return b.points - a.points;
+                        
+                        // 2. Then goal difference
                         const gdA = a.goalsFor - a.goalsAgainst;
                         const gdB = b.goalsFor - b.goalsAgainst;
                         if (gdB !== gdA) return gdB - gdA;
-                        return b.goalsFor - a.goalsFor;
+                        
+                        // 3. Then goals for
+                        if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor;
+                        
+                        // 4. If all equal, use manualRank (tiebreaker)
+                        if (a.manualRank && b.manualRank) return a.manualRank - b.manualRank;
+                        if (a.manualRank) return -1;
+                        if (b.manualRank) return 1;
+                        
+                        return 0;
                       })
                       .map((team, idx) => (
                         <tr
                           key={team._id}
                           className={`border-t ${idx < 2 ? 'bg-green-50' : ''}`}
                         >
-                          <td className="px-2 sm:px-3 py-2 font-medium text-gray-500">{idx + 1}</td>
+                          <td className="px-2 sm:px-3 py-2 font-medium text-gray-500">
+                            {idx + 1}
+                          </td>
                           <td className="px-2 sm:px-3 py-2">
                             <div className="flex items-center gap-1 sm:gap-2">
                               {team.logoUrl && (

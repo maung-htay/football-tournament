@@ -3,14 +3,16 @@ import mongoose, { Schema, Document } from 'mongoose';
 export interface IMatch extends Document {
   homeTeam?: mongoose.Types.ObjectId;
   awayTeam?: mongoose.Types.ObjectId;
-  // For knockout rounds - placeholder like "Group A 1st", "Winner M1"
   homePlaceholder?: string;
   awayPlaceholder?: string;
   homeScore: number | null;
   awayScore: number | null;
+  homePenalty?: number | null;
+  awayPenalty?: number | null;
+  liveUrl?: string;
   groupId?: mongoose.Types.ObjectId;
   round: 'group' | 'round32' | 'round16' | 'quarter' | 'semi' | 'final' | 'third';
-  matchName?: string; // e.g., "M1", "QF1", "SF1"
+  matchName?: string;
   venue: string;
   matchDate: Date;
   matchTime: string;
@@ -27,6 +29,9 @@ const MatchSchema = new Schema<IMatch>(
     awayPlaceholder: { type: String },
     homeScore: { type: Number, default: null },
     awayScore: { type: Number, default: null },
+    homePenalty: { type: Number, default: null },
+    awayPenalty: { type: Number, default: null },
+    liveUrl: { type: String },
     groupId: { type: Schema.Types.ObjectId, ref: 'Group' },
     round: {
       type: String,

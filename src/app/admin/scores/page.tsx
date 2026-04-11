@@ -6,7 +6,6 @@ interface Team {
   _id: string;
   name: string;
   shortName: string;
-  logoUrl?: string;
 }
 
 interface Match {
@@ -17,6 +16,9 @@ interface Match {
   awayPlaceholder?: string;
   homeScore: number | null;
   awayScore: number | null;
+  homePenalty?: number | null;
+  awayPenalty?: number | null;
+  liveUrl?: string;
   groupId?: { name: string };
   round: string;
   matchName?: string;
@@ -28,18 +30,10 @@ interface Match {
 
 const TeamDisplay = ({ team, placeholder }: { team?: Team | null; placeholder?: string }) => {
   if (team) {
-    return (
-      <div className="flex flex-col items-center text-center">
-        <p className="font-bold text-sm sm:text-base leading-tight">{team.name}</p>
-      </div>
-    );
+    return <p className="font-bold text-sm sm:text-base leading-tight text-center">{team.name}</p>;
   }
   if (placeholder) {
-    return (
-      <div className="flex flex-col items-center text-center">
-        <p className="font-medium text-sm sm:text-base text-gray-500">{placeholder}</p>
-      </div>
-    );
+    return <p className="font-medium text-sm sm:text-base text-gray-500 text-center">{placeholder}</p>;
   }
   return <span className="text-gray-400">TBD</span>;
 };
@@ -50,14 +44,18 @@ export default function ScoresPage() {
   const [updating, setUpdating] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [filter, setFilter] = useState<'all' | 'scheduled' | 'live' | 'completed'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'scheduled' | 'live' | 'completed'>('all');
+  const [venueFilter, setVenueFilter] = useState<string>('all');
 
   const [editingMatch, setEditingMatch] = useState<string | null>(null);
-  const [scores, setScores] = useState<{ home: number; away: number }>({ home: 0, away: 0 });
+  const [scores, setScores] = useState<{ home: number; away: number; homePen: number; awayPen: number; liveUrl: string }>({ 
+    home: 0, away: 0, homePen: 0, awayPen: 0, liveUrl: '' 
+  });
+  const [showPenalty, setShowPenalty] = useState(false);
 
   useEffect(() => {
     fetchMatches();
-    const interval = setInterval(fetchMatches, 10000);
+    const interval = setInterval(fetchMatches, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -98,7 +96,14 @@ export default function ScoresPage() {
 
   const handleEditClick = (match: Match) => {
     setEditingMatch(match._id);
-    setScores({ home: match.homeScore ?? 0, away: match.awayScore ?? 0 });
+    setScores({ 
+      home: match.homeScore ?? 0, 
+      away: match.awayScore ?? 0,
+      homePen: match.homePenalty ?? 0,
+      awayPen: match.awayPenalty ?? 0,
+      liveUrl: match.liveUrl || ''
+    });
+    setShowPenalty(match.homePenalty !== null && match.homePenalty !== undefined);
     setError('');
     setSuccess('');
   };
@@ -109,7 +114,18 @@ export default function ScoresPage() {
     setSuccess('');
 
     try {
-      const body: any = { homeScore: scores.home, awayScore: scores.away };
+      const body: any = { 
+        homeScore: scores.home, 
+        awayScore: scores.away,
+        liveUrl: scores.liveUrl || null
+      };
+      if (showPenalty) {
+        body.homePenalty = scores.homePen;
+        body.awayPenalty = scores.awayPen;
+      } else {
+        body.homePenalty = null;
+        body.awayPenalty = null;
+      }
       if (complete) body.status = 'completed';
 
       const res = await fetch(`/api/matches/${matchId}`, {
@@ -121,6 +137,7 @@ export default function ScoresPage() {
       if (!res.ok) throw new Error('Failed to update');
       setSuccess(complete ? 'Match completed!' : 'Score updated');
       setEditingMatch(null);
+      setShowPenalty(false);
       fetchMatches();
     } catch (error: any) {
       setError(error.message);
@@ -144,11 +161,21 @@ export default function ScoresPage() {
     return labels[round] || round;
   };
 
+  const isKnockout = (round: string) => ['round32', 'round16', 'quarter', 'semi', 'third', 'final'].includes(round);
+
+  const venues = [...new Set(matches.map(m => m.venue))].sort();
+
   const filteredMatches = matches.filter((match) => {
-    if (filter === 'scheduled') return match.status === 'scheduled';
-    if (filter === 'live') return match.status === 'live';
-    if (filter === 'completed') return match.status === 'completed';
-    return match.status !== 'cancelled';
+    let statusMatch = true;
+    if (statusFilter === 'scheduled') statusMatch = match.status === 'scheduled';
+    if (statusFilter === 'live') statusMatch = match.status === 'live';
+    if (statusFilter === 'completed') statusMatch = match.status === 'completed';
+    if (statusFilter === 'all') statusMatch = match.status !== 'cancelled';
+
+    let venueMatch = true;
+    if (venueFilter !== 'all') venueMatch = match.venue === venueFilter;
+    
+    return statusMatch && venueMatch;
   }).sort((a, b) => {
     if (a.status === 'live' && b.status !== 'live') return -1;
     if (b.status === 'live' && a.status !== 'live') return 1;
@@ -167,16 +194,30 @@ export default function ScoresPage() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-xl sm:text-2xl font-bold text-gray-800">Score Management</h2>
+      <div className="flex justify-between items-center">
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-800">Score Management</h2>
+        <span className="text-xs text-gray-400">Auto-refresh: 30s</span>
+      </div>
       
-      {/* Filter buttons */}
-      <div className="flex gap-1 sm:gap-2 flex-wrap">
-        <button onClick={() => setFilter('all')} className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm ${filter === 'all' ? 'bg-gray-800 text-white' : 'bg-gray-200'}`}>All</button>
-        <button onClick={() => setFilter('scheduled')} className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm ${filter === 'scheduled' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>Scheduled</button>
-        <button onClick={() => setFilter('live')} className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm flex items-center gap-1 ${filter === 'live' ? 'bg-red-600 text-white' : 'bg-gray-200'}`}>
-          🔴 Live {liveCount > 0 && <span className={`px-1.5 py-0.5 rounded-full text-xs ${filter === 'live' ? 'bg-white text-red-600' : 'bg-red-500 text-white'}`}>{liveCount}</span>}
-        </button>
-        <button onClick={() => setFilter('completed')} className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm ${filter === 'completed' ? 'bg-green-600 text-white' : 'bg-gray-200'}`}>Completed</button>
+      {/* Filters */}
+      <div className="flex flex-wrap gap-2">
+        <div className="flex gap-1">
+          <button onClick={() => setStatusFilter('all')} className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm ${statusFilter === 'all' ? 'bg-gray-800 text-white' : 'bg-gray-200'}`}>All</button>
+          <button onClick={() => setStatusFilter('scheduled')} className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm ${statusFilter === 'scheduled' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>Scheduled</button>
+          <button onClick={() => setStatusFilter('live')} className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm flex items-center gap-1 ${statusFilter === 'live' ? 'bg-red-600 text-white' : 'bg-gray-200'}`}>
+            🔴 Live {liveCount > 0 && <span className={`px-1.5 py-0.5 rounded-full text-xs ${statusFilter === 'live' ? 'bg-white text-red-600' : 'bg-red-500 text-white'}`}>{liveCount}</span>}
+          </button>
+          <button onClick={() => setStatusFilter('completed')} className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm ${statusFilter === 'completed' ? 'bg-green-600 text-white' : 'bg-gray-200'}`}>Done</button>
+        </div>
+
+        <select 
+          value={venueFilter} 
+          onChange={(e) => setVenueFilter(e.target.value)}
+          className="px-3 py-1.5 rounded-lg text-xs sm:text-sm border bg-white"
+        >
+          <option value="all">All Venues</option>
+          {venues.map(v => <option key={v} value={v}>{v}</option>)}
+        </select>
       </div>
 
       {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</div>}
@@ -188,7 +229,7 @@ export default function ScoresPage() {
         ) : (
           filteredMatches.map((match) => (
             <div key={match._id} className={`bg-white rounded-xl shadow overflow-hidden ${match.status === 'live' ? 'ring-2 ring-red-400' : ''}`}>
-              {/* Header with Date, Time, Venue, Round/Stage */}
+              {/* Header */}
               <div className="bg-gray-50 px-3 sm:px-4 py-2 flex justify-between items-center text-xs sm:text-sm">
                 <div className="flex items-center gap-2 text-gray-600">
                   <span>{formatDate(match.matchDate)} {match.matchTime}</span>
@@ -208,82 +249,144 @@ export default function ScoresPage() {
 
               <div className="p-3 sm:p-4">
                 {editingMatch === match._id ? (
-                  <div className="flex items-center justify-center gap-3 sm:gap-4">
-                    <div className="text-center flex-1">
-                      <TeamDisplay team={match.homeTeam} placeholder={match.homePlaceholder} />
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-center gap-3 sm:gap-4">
+                      <div className="text-center flex-1">
+                        <TeamDisplay team={match.homeTeam} placeholder={match.homePlaceholder} />
+                        <input
+                          type="number"
+                          min="0"
+                          value={scores.home}
+                          onChange={(e) => setScores({ ...scores, home: parseInt(e.target.value) || 0 })}
+                          className="w-16 sm:w-20 text-center text-xl sm:text-2xl font-bold border-2 border-orange-300 rounded-lg py-2 mt-2"
+                        />
+                      </div>
+                      <span className="text-xl sm:text-2xl text-gray-400">-</span>
+                      <div className="text-center flex-1">
+                        <TeamDisplay team={match.awayTeam} placeholder={match.awayPlaceholder} />
+                        <input
+                          type="number"
+                          min="0"
+                          value={scores.away}
+                          onChange={(e) => setScores({ ...scores, away: parseInt(e.target.value) || 0 })}
+                          className="w-16 sm:w-20 text-center text-xl sm:text-2xl font-bold border-2 border-orange-300 rounded-lg py-2 mt-2"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Penalty Section */}
+                    {isKnockout(match.round) && (
+                      <div className="border-t pt-3">
+                        <label className="flex items-center gap-2 justify-center text-sm mb-2">
+                          <input 
+                            type="checkbox" 
+                            checked={showPenalty} 
+                            onChange={(e) => setShowPenalty(e.target.checked)}
+                            className="w-4 h-4"
+                          />
+                          <span>Penalty Shootout</span>
+                        </label>
+                        {showPenalty && (
+                          <div className="flex items-center justify-center gap-3">
+                            <input
+                              type="number"
+                              min="0"
+                              value={scores.homePen}
+                              onChange={(e) => setScores({ ...scores, homePen: parseInt(e.target.value) || 0 })}
+                              className="w-14 text-center text-lg font-bold border-2 border-purple-300 rounded-lg py-1"
+                            />
+                            <span className="text-sm text-gray-500">PEN</span>
+                            <input
+                              type="number"
+                              min="0"
+                              value={scores.awayPen}
+                              onChange={(e) => setScores({ ...scores, awayPen: parseInt(e.target.value) || 0 })}
+                              className="w-14 text-center text-lg font-bold border-2 border-purple-300 rounded-lg py-1"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Live URL */}
+                    <div className="border-t pt-3">
+                      <label className="block text-sm text-gray-600 mb-1 text-center">📺 Facebook Live URL</label>
                       <input
-                        type="number"
-                        min="0"
-                        value={scores.home}
-                        onChange={(e) => setScores({ ...scores, home: parseInt(e.target.value) || 0 })}
-                        className="w-16 sm:w-20 text-center text-xl sm:text-2xl font-bold border-2 border-orange-300 rounded-lg py-2 mt-2"
+                        type="url"
+                        value={scores.liveUrl}
+                        onChange={(e) => setScores({ ...scores, liveUrl: e.target.value })}
+                        placeholder="https://facebook.com/..."
+                        className="w-full border rounded-lg px-3 py-2 text-sm"
                       />
                     </div>
-                    <span className="text-xl sm:text-2xl text-gray-400">-</span>
-                    <div className="text-center flex-1">
-                      <TeamDisplay team={match.awayTeam} placeholder={match.awayPlaceholder} />
-                      <input
-                        type="number"
-                        min="0"
-                        value={scores.away}
-                        onChange={(e) => setScores({ ...scores, away: parseInt(e.target.value) || 0 })}
-                        className="w-16 sm:w-20 text-center text-xl sm:text-2xl font-bold border-2 border-orange-300 rounded-lg py-2 mt-2"
-                      />
+
+                    <div className="flex justify-center gap-2 pt-2">
+                      <button onClick={() => handleUpdateScore(match._id, false)} disabled={updating === match._id} className="bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-lg disabled:opacity-50 text-sm">Update</button>
+                      <button onClick={() => handleUpdateScore(match._id, true)} disabled={updating === match._id} className="bg-green-600 text-white px-3 sm:px-4 py-2 rounded-lg disabled:opacity-50 text-sm">✓ Complete</button>
+                      <button onClick={() => { setEditingMatch(null); setShowPenalty(false); }} className="bg-gray-300 px-3 sm:px-4 py-2 rounded-lg text-sm">Cancel</button>
                     </div>
                   </div>
                 ) : (
-                  <div className="flex items-center justify-center">
-                    <div className="flex-1 text-center">
-                      <TeamDisplay team={match.homeTeam} placeholder={match.homePlaceholder} />
+                  <>
+                    <div className="flex items-center justify-center">
+                      <div className="flex-1 text-center">
+                        <TeamDisplay team={match.homeTeam} placeholder={match.homePlaceholder} />
+                      </div>
+                      <div className="px-3 sm:px-6">
+                        {match.status === 'completed' || match.status === 'live' ? (
+                          <div className="text-center">
+                            <div className="text-2xl sm:text-3xl font-bold">{match.homeScore} - {match.awayScore}</div>
+                            {match.homePenalty !== null && match.homePenalty !== undefined && (
+                              <div className="text-sm text-purple-600 font-medium">
+                                ({match.homePenalty} - {match.awayPenalty} PEN)
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="text-xl sm:text-2xl text-gray-300">vs</div>
+                        )}
+                        {match.status === 'live' && <p className="text-red-500 text-xs font-medium animate-pulse text-center mt-1">● LIVE</p>}
+                      </div>
+                      <div className="flex-1 text-center">
+                        <TeamDisplay team={match.awayTeam} placeholder={match.awayPlaceholder} />
+                      </div>
                     </div>
-                    <div className="px-3 sm:px-6">
-                      {match.status === 'completed' || match.status === 'live' ? (
-                        <div className="text-2xl sm:text-3xl font-bold">{match.homeScore} - {match.awayScore}</div>
-                      ) : (
-                        <div className="text-xl sm:text-2xl text-gray-300">vs</div>
+
+                    {/* Live Stream Link */}
+                    {match.liveUrl && (
+                      <div className="mt-2 text-center">
+                        <a 
+                          href={match.liveUrl} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 text-sm"
+                        >
+                          📺 Live Stream
+                        </a>
+                      </div>
+                    )}
+
+                    <div className="mt-3 sm:mt-4 flex justify-center gap-2 flex-wrap">
+                      {match.status === 'scheduled' && (
+                        <button
+                          onClick={() => handleStartMatch(match._id)}
+                          disabled={updating === match._id || !match.homeTeam || !match.awayTeam}
+                          className="bg-green-600 text-white px-4 sm:px-6 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 text-sm"
+                        >
+                          {updating === match._id ? 'Starting...' : '▶️ Start Match'}
+                        </button>
                       )}
-                      {match.status === 'live' && <p className="text-red-500 text-xs font-medium animate-pulse text-center mt-1">● LIVE</p>}
+
+                      {match.status === 'live' && (
+                        <button onClick={() => handleEditClick(match)} className="bg-orange-500 text-white px-4 sm:px-6 py-2 rounded-lg hover:bg-orange-600 text-sm">⚽ Update Score</button>
+                      )}
+
+                      {match.status === 'completed' && (
+                        <button onClick={() => handleEditClick(match)} className="bg-gray-500 text-white px-4 sm:px-6 py-2 rounded-lg hover:bg-gray-600 text-sm">✏️ Edit</button>
+                      )}
                     </div>
-                    <div className="flex-1 text-center">
-                      <TeamDisplay team={match.awayTeam} placeholder={match.awayPlaceholder} />
-                    </div>
-                  </div>
+                  </>
                 )}
-
-                <div className="mt-3 sm:mt-4 flex justify-center gap-2 flex-wrap">
-                  {match.status === 'scheduled' && (
-                    <button
-                      onClick={() => handleStartMatch(match._id)}
-                      disabled={updating === match._id || !match.homeTeam || !match.awayTeam}
-                      className="bg-green-600 text-white px-4 sm:px-6 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 text-sm"
-                    >
-                      {updating === match._id ? 'Starting...' : '▶️ Start Match'}
-                    </button>
-                  )}
-
-                  {match.status === 'live' && (
-                    editingMatch === match._id ? (
-                      <>
-                        <button onClick={() => handleUpdateScore(match._id, false)} disabled={updating === match._id} className="bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-lg disabled:opacity-50 text-sm">Update</button>
-                        <button onClick={() => handleUpdateScore(match._id, true)} disabled={updating === match._id} className="bg-green-600 text-white px-3 sm:px-4 py-2 rounded-lg disabled:opacity-50 text-sm">✓ Complete</button>
-                        <button onClick={() => setEditingMatch(null)} className="bg-gray-300 px-3 sm:px-4 py-2 rounded-lg text-sm">Cancel</button>
-                      </>
-                    ) : (
-                      <button onClick={() => handleEditClick(match)} className="bg-orange-500 text-white px-4 sm:px-6 py-2 rounded-lg hover:bg-orange-600 text-sm">⚽ Update Score</button>
-                    )
-                  )}
-
-                  {match.status === 'completed' && (
-                    editingMatch === match._id ? (
-                      <>
-                        <button onClick={() => handleUpdateScore(match._id, true)} disabled={updating === match._id} className="bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-lg disabled:opacity-50 text-sm">Save</button>
-                        <button onClick={() => setEditingMatch(null)} className="bg-gray-300 px-3 sm:px-4 py-2 rounded-lg text-sm">Cancel</button>
-                      </>
-                    ) : (
-                      <button onClick={() => handleEditClick(match)} className="bg-gray-500 text-white px-4 sm:px-6 py-2 rounded-lg hover:bg-gray-600 text-sm">✏️ Edit</button>
-                    )
-                  )}
-                </div>
               </div>
             </div>
           ))

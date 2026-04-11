@@ -2,24 +2,36 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [userRole, setUserRole] = useState<'admin' | 'volunteer' | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
+  // Pages volunteer can access
+  const volunteerPages = ['/admin', '/admin/scores', '/admin/standings'];
+
   useEffect(() => {
     // Check if already authenticated
     const auth = sessionStorage.getItem('adminAuth');
-    if (auth === 'true') {
+    const role = sessionStorage.getItem('adminRole') as 'admin' | 'volunteer' | null;
+    if (auth === 'true' && role) {
       setIsAuthenticated(true);
+      setUserRole(role);
+      
+      // Redirect volunteer if trying to access restricted page
+      if (role === 'volunteer' && !volunteerPages.includes(pathname)) {
+        router.push('/admin/scores');
+      }
     }
     setIsLoading(false);
-  }, []);
+  }, [pathname]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,9 +44,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         body: JSON.stringify({ username, password }),
       });
 
-      if (res.ok) {
+      const data = await res.json();
+
+      if (res.ok && data.success) {
         sessionStorage.setItem('adminAuth', 'true');
+        sessionStorage.setItem('adminRole', data.role);
         setIsAuthenticated(true);
+        setUserRole(data.role);
+        
+        // Redirect volunteer to scores page
+        if (data.role === 'volunteer') {
+          router.push('/admin/scores');
+        }
       } else {
         setError('Invalid username or password');
       }
@@ -45,19 +66,26 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const handleLogout = () => {
     sessionStorage.removeItem('adminAuth');
+    sessionStorage.removeItem('adminRole');
     setIsAuthenticated(false);
+    setUserRole(null);
     setUsername('');
     setPassword('');
   };
 
-  const navItems = [
-    { href: '/admin', label: 'Dashboard', icon: '🏠' },
-    { href: '/admin/teams', label: 'Teams', icon: '👥' },
-    { href: '/admin/groups', label: 'Groups', icon: '🎲' },
-    { href: '/admin/matches', label: 'Matches', icon: '📅' },
-    { href: '/admin/scores', label: 'Scores', icon: '⚽' },
-    { href: '/admin/standings', label: 'Standings', icon: '📊' },
+  const allNavItems = [
+    { href: '/admin', label: 'Dashboard', icon: '🏠', roles: ['admin', 'volunteer'] },
+    { href: '/admin/teams', label: 'Teams', icon: '👥', roles: ['admin'] },
+    { href: '/admin/groups', label: 'Groups', icon: '🎲', roles: ['admin'] },
+    { href: '/admin/matches', label: 'Matches', icon: '📅', roles: ['admin'] },
+    { href: '/admin/scores', label: 'Scores', icon: '⚽', roles: ['admin', 'volunteer'] },
+    { href: '/admin/standings', label: 'Standings', icon: '📊', roles: ['admin', 'volunteer'] },
   ];
+
+  // Filter nav items based on role
+  const navItems = allNavItems.filter(item => 
+    userRole && item.roles.includes(userRole)
+  );
 
   if (isLoading) {
     return (
@@ -128,7 +156,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* Header */}
       <header className="bg-gray-800 text-white shadow-lg">
         <div className="max-w-7xl mx-auto px-4 py-3 sm:py-4 flex justify-between items-center">
-          <h1 className="text-lg sm:text-xl font-bold">⚽ Admin Panel</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-lg sm:text-xl font-bold">⚽ Admin Panel</h1>
+            {userRole === 'volunteer' && (
+              <span className="bg-yellow-500 text-yellow-900 text-xs px-2 py-1 rounded">Volunteer</span>
+            )}
+          </div>
           <button
             onClick={handleLogout}
             className="text-gray-300 hover:text-white text-sm"

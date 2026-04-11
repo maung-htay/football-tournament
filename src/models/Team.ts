@@ -12,6 +12,7 @@ export interface ITeam extends Document {
   goalsFor: number;
   goalsAgainst: number;
   points: number;
+  manualRank?: number; // For tiebreaker - manual ranking override
 }
 
 const TeamSchema = new Schema<ITeam>(
@@ -27,6 +28,7 @@ const TeamSchema = new Schema<ITeam>(
     goalsFor: { type: Number, default: 0 },
     goalsAgainst: { type: Number, default: 0 },
     points: { type: Number, default: 0 },
+    manualRank: { type: Number, default: null },
   },
   { timestamps: true }
 );
