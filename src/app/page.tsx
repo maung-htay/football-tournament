@@ -53,7 +53,7 @@ const TeamDisplay = ({ team, placeholder }: { team?: Team | null; placeholder?: 
       </div>
     );
   }
-
+  
   if (placeholder) {
     return (
       <div className="flex flex-col items-center text-center">
@@ -61,7 +61,7 @@ const TeamDisplay = ({ team, placeholder }: { team?: Team | null; placeholder?: 
       </div>
     );
   }
-
+  
   return <span className="text-gray-400">TBD</span>;
 };
 
@@ -92,7 +92,7 @@ export default function Home() {
       const groupsData = await groupsRes.json();
       const matchesData = await matchesRes.json();
       const teamsData = await teamsRes.json();
-
+      
       setGroups(Array.isArray(groupsData) ? groupsData : []);
       setMatches(Array.isArray(matchesData) ? matchesData : []);
       setTeams(Array.isArray(teamsData) ? teamsData : []);
@@ -152,12 +152,12 @@ export default function Home() {
     if (matchFilter === 'live') statusMatch = match.status === 'live';
     if (matchFilter === 'fixtures') statusMatch = match.status === 'scheduled';
     if (matchFilter === 'completed') statusMatch = match.status === 'completed' || match.status === 'cancelled';
-
+    
     let teamMatch = true;
     if (teamFilter !== 'all') {
       teamMatch = match.homeTeam?._id === teamFilter || match.awayTeam?._id === teamFilter;
     }
-
+    
     return statusMatch && teamMatch;
   }).sort((a, b) => {
     if (matchFilter === 'completed') {
@@ -217,23 +217,26 @@ export default function Home() {
         <div className="flex space-x-1 sm:space-x-2 bg-white rounded-lg p-1 shadow">
           <button
             onClick={() => setActiveTab('matches')}
-            className={`flex-1 py-2 sm:py-3 px-2 sm:px-4 rounded-lg font-medium transition text-sm sm:text-base ${activeTab === 'matches' ? 'bg-green-600 text-white' : 'text-gray-600 hover:bg-gray-100'
-              }`}
+            className={`flex-1 py-2 sm:py-3 px-2 sm:px-4 rounded-lg font-medium transition text-sm sm:text-base ${
+              activeTab === 'matches' ? 'bg-green-600 text-white' : 'text-gray-600 hover:bg-gray-100'
+            }`}
           >
             📅 Matches
           </button>
           <button
             onClick={() => setActiveTab('standings')}
-            className={`flex-1 py-2 sm:py-3 px-2 sm:px-4 rounded-lg font-medium transition text-sm sm:text-base ${activeTab === 'standings' ? 'bg-green-600 text-white' : 'text-gray-600 hover:bg-gray-100'
-              }`}
+            className={`flex-1 py-2 sm:py-3 px-2 sm:px-4 rounded-lg font-medium transition text-sm sm:text-base ${
+              activeTab === 'standings' ? 'bg-green-600 text-white' : 'text-gray-600 hover:bg-gray-100'
+            }`}
           >
             📊 Standings
           </button>
           {hasKnockoutMatches && (
             <button
               onClick={() => setActiveTab('bracket')}
-              className={`flex-1 py-2 sm:py-3 px-2 sm:px-4 rounded-lg font-medium transition text-sm sm:text-base ${activeTab === 'bracket' ? 'bg-green-600 text-white' : 'text-gray-600 hover:bg-gray-100'
-                }`}
+              className={`flex-1 py-2 sm:py-3 px-2 sm:px-4 rounded-lg font-medium transition text-sm sm:text-base ${
+                activeTab === 'bracket' ? 'bg-green-600 text-white' : 'text-gray-600 hover:bg-gray-100'
+              }`}
             >
               🏆 Bracket
             </button>
@@ -263,26 +266,30 @@ export default function Home() {
             <div className="flex space-x-1 sm:space-x-2 bg-gray-100 rounded-lg p-1">
               <button
                 onClick={() => setMatchFilter('live')}
-                className={`flex-1 py-2 px-2 sm:px-3 rounded-lg text-xs sm:text-sm font-medium transition flex items-center justify-center gap-1 sm:gap-2 ${matchFilter === 'live' ? 'bg-red-500 text-white' : 'text-gray-600 hover:bg-gray-200'
-                  }`}
+                className={`flex-1 py-2 px-2 sm:px-3 rounded-lg text-xs sm:text-sm font-medium transition flex items-center justify-center gap-1 sm:gap-2 ${
+                  matchFilter === 'live' ? 'bg-red-500 text-white' : 'text-gray-600 hover:bg-gray-200'
+                }`}
               >
                 🔴 Live
                 {liveCount > 0 && (
-                  <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-xs ${matchFilter === 'live' ? 'bg-white text-red-500' : 'bg-red-500 text-white'
-                    }`}>{liveCount}</span>
+                  <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-xs ${
+                    matchFilter === 'live' ? 'bg-white text-red-500' : 'bg-red-500 text-white'
+                  }`}>{liveCount}</span>
                 )}
               </button>
               <button
                 onClick={() => setMatchFilter('fixtures')}
-                className={`flex-1 py-2 px-2 sm:px-3 rounded-lg text-xs sm:text-sm font-medium transition ${matchFilter === 'fixtures' ? 'bg-blue-500 text-white' : 'text-gray-600 hover:bg-gray-200'
-                  }`}
+                className={`flex-1 py-2 px-2 sm:px-3 rounded-lg text-xs sm:text-sm font-medium transition ${
+                  matchFilter === 'fixtures' ? 'bg-blue-500 text-white' : 'text-gray-600 hover:bg-gray-200'
+                }`}
               >
                 📅 Fixtures
               </button>
               <button
                 onClick={() => setMatchFilter('completed')}
-                className={`flex-1 py-2 px-2 sm:px-3 rounded-lg text-xs sm:text-sm font-medium transition ${matchFilter === 'completed' ? 'bg-green-500 text-white' : 'text-gray-600 hover:bg-gray-200'
-                  }`}
+                className={`flex-1 py-2 px-2 sm:px-3 rounded-lg text-xs sm:text-sm font-medium transition ${
+                  matchFilter === 'completed' ? 'bg-green-500 text-white' : 'text-gray-600 hover:bg-gray-200'
+                }`}
               >
                 ✓ Done
               </button>
@@ -302,8 +309,9 @@ export default function Home() {
               filteredMatches.map((match) => (
                 <div
                   key={match._id}
-                  className={`bg-white rounded-xl shadow-md overflow-hidden ${match.status === 'live' ? 'ring-2 ring-red-400' : ''
-                    }`}
+                  className={`bg-white rounded-xl shadow-md overflow-hidden ${
+                    match.status === 'live' ? 'ring-2 ring-red-400' : ''
+                  }`}
                 >
                   <div className="bg-gray-50 px-3 sm:px-4 py-2 flex justify-between items-center border-b">
                     <span className="text-xs sm:text-sm text-gray-600">
@@ -351,9 +359,9 @@ export default function Home() {
                     <div className="mt-2 sm:mt-3 flex justify-between items-center text-xs sm:text-sm text-gray-500">
                       <span>📍 {match.venue}</span>
                       {match.liveUrl && (
-                        <a
-                          href={match.liveUrl}
-                          target="_blank"
+                        <a 
+                          href={match.liveUrl} 
+                          target="_blank" 
                           rel="noopener noreferrer"
                           className="text-blue-600 hover:text-blue-800 font-medium"
                         >
@@ -399,20 +407,20 @@ export default function Home() {
                           .sort((a, b) => {
                             // 1. Sort by points first
                             if (b.points !== a.points) return b.points - a.points;
-
+                            
                             // 2. Then goal difference
                             const gdA = a.goalsFor - a.goalsAgainst;
                             const gdB = b.goalsFor - b.goalsAgainst;
                             if (gdB !== gdA) return gdB - gdA;
-
+                            
                             // 3. Then goals for
                             if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor;
-
+                            
                             // 4. If all equal, use manualRank (tiebreaker)
                             if (a.manualRank && b.manualRank) return a.manualRank - b.manualRank;
                             if (a.manualRank) return -1;
                             if (b.manualRank) return 1;
-
+                            
                             return 0;
                           })
                           .map((team, idx) => (
@@ -448,7 +456,7 @@ export default function Home() {
               {(['round32', 'round16', 'quarter', 'semi', 'final'] as const).map(round => {
                 const roundMatches = matchesByRound[round];
                 if (roundMatches.length === 0) return null;
-
+                
                 return (
                   <div key={round} className="flex flex-col gap-4">
                     <h4 className="text-sm font-bold text-center text-gray-600 border-b pb-2">
@@ -459,21 +467,22 @@ export default function Home() {
                       const homeWinsPen = hasPenalty && match.homePenalty! > match.awayPenalty!;
                       const awayWinsPen = hasPenalty && match.awayPenalty! > match.homePenalty!;
                       const homeWins = match.status === 'completed' && (
-                        match.homeScore! > match.awayScore! ||
+                        match.homeScore! > match.awayScore! || 
                         (match.homeScore === match.awayScore && homeWinsPen)
                       );
                       const awayWins = match.status === 'completed' && (
                         match.awayScore! > match.homeScore! ||
                         (match.homeScore === match.awayScore && awayWinsPen)
                       );
-
+                      
                       return (
-                        <div
-                          key={match._id}
-                          className={`rounded-lg p-3 w-56 border-l-4 ${match.status === 'completed' ? 'bg-green-50 border-green-500' :
-                              match.status === 'live' ? 'bg-red-50 border-red-500' :
-                                'bg-gray-50 border-gray-300'
-                            }`}
+                        <div 
+                          key={match._id} 
+                          className={`rounded-lg p-3 w-56 border-l-4 ${
+                            match.status === 'completed' ? 'bg-green-50 border-green-500' :
+                            match.status === 'live' ? 'bg-red-50 border-red-500' :
+                            'bg-gray-50 border-gray-300'
+                          }`}
                         >
                           {match.matchName && <p className="text-xs text-gray-500 mb-1">{match.matchName}</p>}
                           <div className={`text-sm font-medium flex justify-between ${homeWins ? 'text-green-700' : ''}`}>
@@ -515,18 +524,19 @@ export default function Home() {
                   </div>
                 );
               })}
-
+              
               {/* 3rd Place */}
               {matchesByRound.third.length > 0 && (
                 <div className="flex flex-col gap-4">
                   <h4 className="text-sm font-bold text-center text-gray-600 border-b pb-2">3rd Place</h4>
                   {matchesByRound.third.map(match => (
-                    <div
-                      key={match._id}
-                      className={`rounded-lg p-3 w-52 border-l-4 ${match.status === 'completed' ? 'bg-amber-50 border-amber-500' :
-                          match.status === 'live' ? 'bg-red-50 border-red-500' :
-                            'bg-gray-50 border-gray-300'
-                        }`}
+                    <div 
+                      key={match._id} 
+                      className={`rounded-lg p-3 w-52 border-l-4 ${
+                        match.status === 'completed' ? 'bg-amber-50 border-amber-500' :
+                        match.status === 'live' ? 'bg-red-50 border-red-500' :
+                        'bg-gray-50 border-gray-300'
+                      }`}
                     >
                       <div className="text-sm font-medium flex justify-between">
                         <span className="truncate flex-1">{getTeamDisplayText(match, 'home')}</span>

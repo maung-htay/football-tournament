@@ -163,7 +163,7 @@ export default function ScoresPage() {
 
   const isKnockout = (round: string) => ['round32', 'round16', 'quarter', 'semi', 'third', 'final'].includes(round);
 
-  const venues = [...new Set(matches.map(m => m.venue))].sort();
+  const venues = Array.from(new Set(matches.map(m => m.venue))).sort();
 
   const filteredMatches = matches.filter((match) => {
     let statusMatch = true;
