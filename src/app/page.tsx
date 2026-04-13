@@ -42,6 +42,7 @@ interface Match {
   matchDate: string;
   matchTime: string;
   status: string;
+  startedAt?: string;
 }
 
 // Team display component - uses full name only
@@ -65,6 +66,37 @@ const TeamDisplay = ({ team, placeholder }: { team?: Team | null; placeholder?: 
   return <span className="text-gray-400">TBD</span>;
 };
 
+// Timer component for live matches
+const MatchTimer = ({ startedAt, durationMinutes }: { startedAt: string; durationMinutes: number }) => {
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    const startTime = new Date(startedAt).getTime();
+    
+    const updateTimer = () => {
+      const now = Date.now();
+      const elapsedSeconds = Math.floor((now - startTime) / 1000);
+      setElapsed(elapsedSeconds);
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [startedAt]);
+
+  const minutes = Math.floor(elapsed / 60);
+  const seconds = elapsed % 60;
+  const totalDurationSeconds = durationMinutes * 60;
+  const isOvertime = elapsed >= totalDurationSeconds;
+
+  return (
+    <span className={`font-mono font-bold ${isOvertime ? 'text-red-600' : 'text-green-600'}`}>
+      {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
+      {isOvertime && ' ⏰'}
+    </span>
+  );
+};
+
 export default function Home() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
@@ -74,13 +106,25 @@ export default function Home() {
   const [teamFilter, setTeamFilter] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [showContact, setShowContact] = useState(false);
+  const [matchDuration, setMatchDuration] = useState(15);
 
   useEffect(() => {
     fetchData();
+    fetchSettings();
     setShowContact(process.env.NEXT_PUBLIC_SHOW_CONTACT === 'true');
     const interval = setInterval(fetchData, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  const fetchSettings = async () => {
+    try {
+      const res = await fetch('/api/settings');
+      const data = await res.json();
+      setMatchDuration(data.matchDurationMinutes || 15);
+    } catch (error) {
+      console.error('Failed to fetch settings:', error);
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -202,7 +246,7 @@ export default function Home() {
       <header className="bg-green-600 text-white shadow-lg">
         <div className="max-w-6xl mx-auto px-4 py-4 sm:py-6">
           <div className="flex justify-between items-center">
-            <h1 className="text-xl sm:text-2xl font-bold">⚽ Sagaing Revolutions Cup</h1>
+            <h1 className="text-xl sm:text-2xl font-bold">⚽ Football Tournament</h1>
             {showContact && (
               <Link href="/contact" className="text-green-100 hover:text-white text-sm">
                 📞 Contact
@@ -338,7 +382,12 @@ export default function Home() {
                               </div>
                             )}
                             {match.status === 'live' && (
-                              <p className="text-red-500 text-xs sm:text-sm font-medium animate-pulse mt-1">● LIVE</p>
+                              <div className="mt-1">
+                                <p className="text-red-500 text-xs sm:text-sm font-medium animate-pulse">● LIVE</p>
+                                {match.startedAt && (
+                                  <MatchTimer startedAt={match.startedAt} durationMinutes={matchDuration} />
+                                )}
+                              </div>
                             )}
                           </div>
                         ) : match.status === 'cancelled' ? (

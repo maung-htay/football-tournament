@@ -26,6 +26,7 @@ interface Match {
   matchDate: string;
   matchTime: string;
   status: string;
+  startedAt?: string;
 }
 
 const TeamDisplay = ({ team, placeholder }: { team?: Team | null; placeholder?: string }) => {
@@ -38,6 +39,39 @@ const TeamDisplay = ({ team, placeholder }: { team?: Team | null; placeholder?: 
   return <span className="text-gray-400">TBD</span>;
 };
 
+// Timer component for live matches
+const MatchTimer = ({ startedAt, durationMinutes }: { startedAt: string; durationMinutes: number }) => {
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    const startTime = new Date(startedAt).getTime();
+    
+    const updateTimer = () => {
+      const now = Date.now();
+      const elapsedSeconds = Math.floor((now - startTime) / 1000);
+      setElapsed(elapsedSeconds);
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [startedAt]);
+
+  const minutes = Math.floor(elapsed / 60);
+  const seconds = elapsed % 60;
+  const totalDurationSeconds = durationMinutes * 60;
+  const isOvertime = elapsed >= totalDurationSeconds;
+
+  return (
+    <div className={`text-center ${isOvertime ? 'text-red-600' : 'text-green-600'}`}>
+      <span className="text-lg font-mono font-bold">
+        {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
+      </span>
+      {isOvertime && <span className="text-xs ml-1">⏰</span>}
+    </div>
+  );
+};
+
 export default function ScoresPage() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,6 +80,8 @@ export default function ScoresPage() {
   const [success, setSuccess] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'scheduled' | 'live' | 'completed'>('all');
   const [venueFilter, setVenueFilter] = useState<string>('all');
+  const [matchDuration, setMatchDuration] = useState(15);
+  const [currentTime, setCurrentTime] = useState(Date.now());
 
   const [editingMatch, setEditingMatch] = useState<string | null>(null);
   const [scores, setScores] = useState<{ home: number; away: number; homePen: number; awayPen: number; liveUrl: string }>({ 
@@ -55,9 +91,24 @@ export default function ScoresPage() {
 
   useEffect(() => {
     fetchMatches();
-    const interval = setInterval(fetchMatches, 30000);
-    return () => clearInterval(interval);
+    fetchSettings();
+    const matchInterval = setInterval(fetchMatches, 30000);
+    const timeInterval = setInterval(() => setCurrentTime(Date.now()), 1000);
+    return () => {
+      clearInterval(matchInterval);
+      clearInterval(timeInterval);
+    };
   }, []);
+
+  const fetchSettings = async () => {
+    try {
+      const res = await fetch('/api/settings');
+      const data = await res.json();
+      setMatchDuration(data.matchDurationMinutes || 15);
+    } catch (error) {
+      console.error('Failed to fetch settings:', error);
+    }
+  };
 
   const fetchMatches = async () => {
     try {
@@ -146,6 +197,15 @@ export default function ScoresPage() {
     }
   };
 
+  // Check if match can be completed (1 minute before end)
+  const canComplete = (match: Match) => {
+    if (!match.startedAt) return true; // fallback if no startedAt
+    const startTime = new Date(match.startedAt).getTime();
+    const elapsedSeconds = (currentTime - startTime) / 1000;
+    const thresholdSeconds = (matchDuration - 1) * 60; // e.g. 5min duration -> 4min (240s) to enable
+    return elapsedSeconds >= thresholdSeconds;
+  };
+
   const formatDate = (dateStr: string) => new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
   const getRoundLabel = (round: string) => {
@@ -196,7 +256,10 @@ export default function ScoresPage() {
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h2 className="text-xl sm:text-2xl font-bold text-gray-800">Score Management</h2>
-        <span className="text-xs text-gray-400">Auto-refresh: 30s</span>
+        <div className="text-right text-xs text-gray-400">
+          <div>Match: {matchDuration} min</div>
+          <div>Auto-refresh: 30s</div>
+        </div>
       </div>
       
       {/* Filters */}
@@ -227,169 +290,206 @@ export default function ScoresPage() {
         {filteredMatches.length === 0 ? (
           <div className="bg-white rounded-xl shadow p-8 text-center text-gray-500">No matches found</div>
         ) : (
-          filteredMatches.map((match) => (
-            <div key={match._id} className={`bg-white rounded-xl shadow overflow-hidden ${match.status === 'live' ? 'ring-2 ring-red-400' : ''}`}>
-              {/* Header */}
-              <div className="bg-gray-50 px-3 sm:px-4 py-2 flex justify-between items-center text-xs sm:text-sm">
-                <div className="flex items-center gap-2 text-gray-600">
-                  <span>{formatDate(match.matchDate)} {match.matchTime}</span>
-                  <span>|</span>
-                  <span>{match.venue}</span>
-                  <span>|</span>
-                  <span className="font-medium text-green-600">{getRoundLabel(match.round)}</span>
-                  {match.matchName && <span className="text-gray-500">({match.matchName})</span>}
-                </div>
-                <span className={`px-2 py-1 rounded text-xs font-medium ${
-                  match.status === 'live' ? 'bg-red-100 text-red-800 animate-pulse' :
-                  match.status === 'completed' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
-                }`}>
-                  {match.status === 'live' ? '🔴 LIVE' : match.status.toUpperCase()}
-                </span>
-              </div>
-
-              <div className="p-3 sm:p-4">
-                {editingMatch === match._id ? (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-center gap-3 sm:gap-4">
-                      <div className="text-center flex-1">
-                        <TeamDisplay team={match.homeTeam} placeholder={match.homePlaceholder} />
-                        <input
-                          type="number"
-                          min="0"
-                          value={scores.home}
-                          onChange={(e) => setScores({ ...scores, home: parseInt(e.target.value) || 0 })}
-                          className="w-16 sm:w-20 text-center text-xl sm:text-2xl font-bold border-2 border-orange-300 rounded-lg py-2 mt-2"
-                        />
-                      </div>
-                      <span className="text-xl sm:text-2xl text-gray-400">-</span>
-                      <div className="text-center flex-1">
-                        <TeamDisplay team={match.awayTeam} placeholder={match.awayPlaceholder} />
-                        <input
-                          type="number"
-                          min="0"
-                          value={scores.away}
-                          onChange={(e) => setScores({ ...scores, away: parseInt(e.target.value) || 0 })}
-                          className="w-16 sm:w-20 text-center text-xl sm:text-2xl font-bold border-2 border-orange-300 rounded-lg py-2 mt-2"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Penalty Section */}
-                    {isKnockout(match.round) && (
-                      <div className="border-t pt-3">
-                        <label className="flex items-center gap-2 justify-center text-sm mb-2">
-                          <input 
-                            type="checkbox" 
-                            checked={showPenalty} 
-                            onChange={(e) => setShowPenalty(e.target.checked)}
-                            className="w-4 h-4"
-                          />
-                          <span>Penalty Shootout</span>
-                        </label>
-                        {showPenalty && (
-                          <div className="flex items-center justify-center gap-3">
-                            <input
-                              type="number"
-                              min="0"
-                              value={scores.homePen}
-                              onChange={(e) => setScores({ ...scores, homePen: parseInt(e.target.value) || 0 })}
-                              className="w-14 text-center text-lg font-bold border-2 border-purple-300 rounded-lg py-1"
-                            />
-                            <span className="text-sm text-gray-500">PEN</span>
-                            <input
-                              type="number"
-                              min="0"
-                              value={scores.awayPen}
-                              onChange={(e) => setScores({ ...scores, awayPen: parseInt(e.target.value) || 0 })}
-                              className="w-14 text-center text-lg font-bold border-2 border-purple-300 rounded-lg py-1"
-                            />
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Live URL */}
-                    <div className="border-t pt-3">
-                      <label className="block text-sm text-gray-600 mb-1 text-center">📺 Facebook Live URL</label>
-                      <input
-                        type="url"
-                        value={scores.liveUrl}
-                        onChange={(e) => setScores({ ...scores, liveUrl: e.target.value })}
-                        placeholder="https://facebook.com/..."
-                        className="w-full border rounded-lg px-3 py-2 text-sm"
-                      />
-                    </div>
-
-                    <div className="flex justify-center gap-2 pt-2">
-                      <button onClick={() => handleUpdateScore(match._id, false)} disabled={updating === match._id} className="bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-lg disabled:opacity-50 text-sm">Update</button>
-                      <button onClick={() => handleUpdateScore(match._id, true)} disabled={updating === match._id} className="bg-green-600 text-white px-3 sm:px-4 py-2 rounded-lg disabled:opacity-50 text-sm">✓ Complete</button>
-                      <button onClick={() => { setEditingMatch(null); setShowPenalty(false); }} className="bg-gray-300 px-3 sm:px-4 py-2 rounded-lg text-sm">Cancel</button>
-                    </div>
+          filteredMatches.map((match) => {
+            const canCompleteMatch = canComplete(match);
+            
+            return (
+              <div key={match._id} className={`bg-white rounded-xl shadow overflow-hidden ${match.status === 'live' ? 'ring-2 ring-red-400' : ''}`}>
+                {/* Header */}
+                <div className="bg-gray-50 px-3 sm:px-4 py-2 flex justify-between items-center text-xs sm:text-sm">
+                  <div className="flex items-center gap-2 text-gray-600">
+                    <span>{formatDate(match.matchDate)} {match.matchTime}</span>
+                    <span>|</span>
+                    <span>{match.venue}</span>
+                    <span>|</span>
+                    <span className="font-medium text-green-600">{getRoundLabel(match.round)}</span>
+                    {match.matchName && <span className="text-gray-500">({match.matchName})</span>}
                   </div>
-                ) : (
-                  <>
-                    <div className="flex items-center justify-center">
-                      <div className="flex-1 text-center">
-                        <TeamDisplay team={match.homeTeam} placeholder={match.homePlaceholder} />
-                      </div>
-                      <div className="px-3 sm:px-6">
-                        {match.status === 'completed' || match.status === 'live' ? (
-                          <div className="text-center">
-                            <div className="text-2xl sm:text-3xl font-bold">{match.homeScore} - {match.awayScore}</div>
-                            {match.homePenalty !== null && match.homePenalty !== undefined && (
-                              <div className="text-sm text-purple-600 font-medium">
-                                ({match.homePenalty} - {match.awayPenalty} PEN)
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="text-xl sm:text-2xl text-gray-300">vs</div>
-                        )}
-                        {match.status === 'live' && <p className="text-red-500 text-xs font-medium animate-pulse text-center mt-1">● LIVE</p>}
-                      </div>
-                      <div className="flex-1 text-center">
-                        <TeamDisplay team={match.awayTeam} placeholder={match.awayPlaceholder} />
-                      </div>
-                    </div>
-
-                    {/* Live Stream Link */}
-                    {match.liveUrl && (
-                      <div className="mt-2 text-center">
-                        <a 
-                          href={match.liveUrl} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 text-sm"
-                        >
-                          📺 Live Stream
-                        </a>
-                      </div>
+                  <div className="flex items-center gap-2">
+                    {match.status === 'live' && match.startedAt && (
+                      <MatchTimer startedAt={match.startedAt} durationMinutes={matchDuration} />
                     )}
+                    <span className={`px-2 py-1 rounded text-xs font-medium ${
+                      match.status === 'live' ? 'bg-red-100 text-red-800 animate-pulse' :
+                      match.status === 'completed' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
+                    }`}>
+                      {match.status === 'live' ? '🔴 LIVE' : match.status.toUpperCase()}
+                    </span>
+                  </div>
+                </div>
 
-                    <div className="mt-3 sm:mt-4 flex justify-center gap-2 flex-wrap">
-                      {match.status === 'scheduled' && (
-                        <button
-                          onClick={() => handleStartMatch(match._id)}
-                          disabled={updating === match._id || !match.homeTeam || !match.awayTeam}
-                          className="bg-green-600 text-white px-4 sm:px-6 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 text-sm"
+                <div className="p-3 sm:p-4">
+                  {editingMatch === match._id ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-center gap-3 sm:gap-4">
+                        <div className="text-center flex-1">
+                          <TeamDisplay team={match.homeTeam} placeholder={match.homePlaceholder} />
+                          <input
+                            type="number"
+                            min="0"
+                            value={scores.home}
+                            onChange={(e) => setScores({ ...scores, home: parseInt(e.target.value) || 0 })}
+                            className="w-16 sm:w-20 text-center text-xl sm:text-2xl font-bold border-2 border-orange-300 rounded-lg py-2 mt-2"
+                          />
+                        </div>
+                        <span className="text-xl sm:text-2xl text-gray-400">-</span>
+                        <div className="text-center flex-1">
+                          <TeamDisplay team={match.awayTeam} placeholder={match.awayPlaceholder} />
+                          <input
+                            type="number"
+                            min="0"
+                            value={scores.away}
+                            onChange={(e) => setScores({ ...scores, away: parseInt(e.target.value) || 0 })}
+                            className="w-16 sm:w-20 text-center text-xl sm:text-2xl font-bold border-2 border-orange-300 rounded-lg py-2 mt-2"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Penalty Section */}
+                      {isKnockout(match.round) && (
+                        <div className="border-t pt-3">
+                          <label className="flex items-center gap-2 justify-center text-sm mb-2">
+                            <input 
+                              type="checkbox" 
+                              checked={showPenalty} 
+                              onChange={(e) => setShowPenalty(e.target.checked)}
+                              className="w-4 h-4"
+                            />
+                            <span>Penalty Shootout</span>
+                          </label>
+                          {showPenalty && (
+                            <div className="flex items-center justify-center gap-3">
+                              <input
+                                type="number"
+                                min="0"
+                                value={scores.homePen}
+                                onChange={(e) => setScores({ ...scores, homePen: parseInt(e.target.value) || 0 })}
+                                className="w-14 text-center text-lg font-bold border-2 border-purple-300 rounded-lg py-1"
+                              />
+                              <span className="text-sm text-gray-500">PEN</span>
+                              <input
+                                type="number"
+                                min="0"
+                                value={scores.awayPen}
+                                onChange={(e) => setScores({ ...scores, awayPen: parseInt(e.target.value) || 0 })}
+                                className="w-14 text-center text-lg font-bold border-2 border-purple-300 rounded-lg py-1"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Live URL */}
+                      <div className="border-t pt-3">
+                        <label className="block text-sm text-gray-600 mb-1 text-center">📺 Facebook Live URL</label>
+                        <input
+                          type="url"
+                          value={scores.liveUrl}
+                          onChange={(e) => setScores({ ...scores, liveUrl: e.target.value })}
+                          placeholder="https://facebook.com/..."
+                          className="w-full border rounded-lg px-3 py-2 text-sm"
+                        />
+                      </div>
+
+                      <div className="flex justify-center gap-2 pt-2">
+                        <button 
+                          onClick={() => handleUpdateScore(match._id, false)} 
+                          disabled={updating === match._id} 
+                          className="bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-lg disabled:opacity-50 text-sm"
                         >
-                          {updating === match._id ? 'Starting...' : '▶️ Start Match'}
+                          Update
                         </button>
-                      )}
-
-                      {match.status === 'live' && (
-                        <button onClick={() => handleEditClick(match)} className="bg-orange-500 text-white px-4 sm:px-6 py-2 rounded-lg hover:bg-orange-600 text-sm">⚽ Update Score</button>
-                      )}
-
-                      {match.status === 'completed' && (
-                        <button onClick={() => handleEditClick(match)} className="bg-gray-500 text-white px-4 sm:px-6 py-2 rounded-lg hover:bg-gray-600 text-sm">✏️ Edit</button>
+                        <button 
+                          onClick={() => handleUpdateScore(match._id, true)} 
+                          disabled={updating === match._id || !canCompleteMatch} 
+                          className={`px-3 sm:px-4 py-2 rounded-lg text-sm ${
+                            canCompleteMatch 
+                              ? 'bg-green-600 text-white' 
+                              : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                          }`}
+                          title={!canCompleteMatch ? `Available at ${matchDuration - 1} minutes` : ''}
+                        >
+                          ✓ Complete
+                        </button>
+                        <button 
+                          onClick={() => { setEditingMatch(null); setShowPenalty(false); }} 
+                          className="bg-gray-300 px-3 sm:px-4 py-2 rounded-lg text-sm"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                      
+                      {!canCompleteMatch && (
+                        <p className="text-center text-xs text-gray-500">
+                          Complete button enables at {matchDuration - 1}:00
+                        </p>
                       )}
                     </div>
-                  </>
-                )}
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-center">
+                        <div className="flex-1 text-center">
+                          <TeamDisplay team={match.homeTeam} placeholder={match.homePlaceholder} />
+                        </div>
+                        <div className="px-3 sm:px-6">
+                          {match.status === 'completed' || match.status === 'live' ? (
+                            <div className="text-center">
+                              <div className="text-2xl sm:text-3xl font-bold">{match.homeScore} - {match.awayScore}</div>
+                              {match.homePenalty !== null && match.homePenalty !== undefined && (
+                                <div className="text-sm text-purple-600 font-medium">
+                                  ({match.homePenalty} - {match.awayPenalty} PEN)
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="text-xl sm:text-2xl text-gray-300">vs</div>
+                          )}
+                          {match.status === 'live' && <p className="text-red-500 text-xs font-medium animate-pulse text-center mt-1">● LIVE</p>}
+                        </div>
+                        <div className="flex-1 text-center">
+                          <TeamDisplay team={match.awayTeam} placeholder={match.awayPlaceholder} />
+                        </div>
+                      </div>
+
+                      {/* Live Stream Link */}
+                      {match.liveUrl && (
+                        <div className="mt-2 text-center">
+                          <a 
+                            href={match.liveUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 text-sm"
+                          >
+                            📺 Live Stream
+                          </a>
+                        </div>
+                      )}
+
+                      <div className="mt-3 sm:mt-4 flex justify-center gap-2 flex-wrap">
+                        {match.status === 'scheduled' && (
+                          <button
+                            onClick={() => handleStartMatch(match._id)}
+                            disabled={updating === match._id || !match.homeTeam || !match.awayTeam}
+                            className="bg-green-600 text-white px-4 sm:px-6 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 text-sm"
+                          >
+                            {updating === match._id ? 'Starting...' : '▶️ Start Match'}
+                          </button>
+                        )}
+
+                        {match.status === 'live' && (
+                          <button onClick={() => handleEditClick(match)} className="bg-orange-500 text-white px-4 sm:px-6 py-2 rounded-lg hover:bg-orange-600 text-sm">⚽ Update Score</button>
+                        )}
+
+                        {match.status === 'completed' && (
+                          <button onClick={() => handleEditClick(match)} className="bg-gray-500 text-white px-4 sm:px-6 py-2 rounded-lg hover:bg-gray-600 text-sm">✏️ Edit</button>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
 

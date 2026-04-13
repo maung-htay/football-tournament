@@ -5,7 +5,7 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Sagaing Revolutions Cup',
+  title: 'Football Tournament Manager',
   description: 'Manage your football tournament with ease',
 };
 
