@@ -377,7 +377,7 @@ export default function GroupsPage() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Teams/Group</label>
               <select value={teamsPerGroup} onChange={(e) => setTeamsPerGroup(Number(e.target.value))} className="w-full border rounded-lg px-3 py-2 text-sm">
-                {[3, 4, 5, 6].map(n => <option key={n} value={n}>{n}</option>)}
+                {[3, 4, 5, 6, 7, 8].map(n => <option key={n} value={n}>{n}</option>)}
               </select>
             </div>
             <button onClick={handleAutoDraw} disabled={drawing || allTeams.length < groupCount * teamsPerGroup} className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm disabled:opacity-50">
