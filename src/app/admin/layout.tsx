@@ -15,7 +15,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [error, setError] = useState('');
 
   // Pages volunteer can access
-  const volunteerPages = ['/admin', '/admin/scores', '/admin/standings'];
+  const volunteerPages = ['/admin', '/admin/scores', '/admin/standings', '/admin/stats'];
 
   useEffect(() => {
     // Check if already authenticated
@@ -80,6 +80,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { href: '/admin/matches', label: 'Matches', icon: '📅', roles: ['admin'] },
     { href: '/admin/scores', label: 'Scores', icon: '⚽', roles: ['admin', 'volunteer'] },
     { href: '/admin/standings', label: 'Standings', icon: '📊', roles: ['admin', 'volunteer'] },
+    { href: '/admin/stats', label: 'Stats', icon: '🏆', roles: ['admin', 'volunteer'] },
   ];
 
   // Filter nav items based on role

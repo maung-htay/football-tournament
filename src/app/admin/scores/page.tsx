@@ -8,6 +8,11 @@ interface Team {
   shortName: string;
 }
 
+interface MatchEvent {
+  team: 'home' | 'away';
+  jerseyNumber: number;
+}
+
 interface Match {
   _id: string;
   homeTeam?: Team;
@@ -27,6 +32,9 @@ interface Match {
   matchTime: string;
   status: string;
   startedAt?: string;
+  goalScorers?: MatchEvent[];
+  yellowCards?: MatchEvent[];
+  redCards?: MatchEvent[];
 }
 
 const TeamDisplay = ({ team, placeholder }: { team?: Team | null; placeholder?: string }) => {
@@ -39,19 +47,15 @@ const TeamDisplay = ({ team, placeholder }: { team?: Team | null; placeholder?: 
   return <span className="text-gray-400">TBD</span>;
 };
 
-// Timer component for live matches
 const MatchTimer = ({ startedAt, durationMinutes }: { startedAt: string; durationMinutes: number }) => {
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
     const startTime = new Date(startedAt).getTime();
-    
     const updateTimer = () => {
       const now = Date.now();
-      const elapsedSeconds = Math.floor((now - startTime) / 1000);
-      setElapsed(elapsedSeconds);
+      setElapsed(Math.floor((now - startTime) / 1000));
     };
-
     updateTimer();
     const interval = setInterval(updateTimer, 1000);
     return () => clearInterval(interval);
@@ -59,8 +63,7 @@ const MatchTimer = ({ startedAt, durationMinutes }: { startedAt: string; duratio
 
   const minutes = Math.floor(elapsed / 60);
   const seconds = elapsed % 60;
-  const totalDurationSeconds = durationMinutes * 60;
-  const isOvertime = elapsed >= totalDurationSeconds;
+  const isOvertime = elapsed >= durationMinutes * 60;
 
   return (
     <div className={`text-center ${isOvertime ? 'text-red-600' : 'text-green-600'}`}>
@@ -88,6 +91,12 @@ export default function ScoresPage() {
     home: 0, away: 0, homePen: 0, awayPen: 0, liveUrl: '' 
   });
   const [showPenalty, setShowPenalty] = useState(false);
+  
+  // Match events state
+  const [goalScorers, setGoalScorers] = useState<MatchEvent[]>([]);
+  const [yellowCards, setYellowCards] = useState<MatchEvent[]>([]);
+  const [redCards, setRedCards] = useState<MatchEvent[]>([]);
+  const [newJersey, setNewJersey] = useState<{ goal: string; yellow: string; red: string }>({ goal: '', yellow: '', red: '' });
 
   useEffect(() => {
     fetchMatches();
@@ -155,8 +164,52 @@ export default function ScoresPage() {
       liveUrl: match.liveUrl || ''
     });
     setShowPenalty(match.homePenalty !== null && match.homePenalty !== undefined);
+    setGoalScorers(match.goalScorers || []);
+    setYellowCards(match.yellowCards || []);
+    setRedCards(match.redCards || []);
+    setNewJersey({ goal: '', yellow: '', red: '' });
     setError('');
     setSuccess('');
+  };
+
+  const addEvent = (type: 'goal' | 'yellow' | 'red', team: 'home' | 'away') => {
+    const jersey = parseInt(newJersey[type]);
+    if (isNaN(jersey) || jersey <= 0) return;
+
+    const event: MatchEvent = { team, jerseyNumber: jersey };
+    
+    if (type === 'goal') {
+      setGoalScorers([...goalScorers, event]);
+      // Auto update score
+      if (team === 'home') {
+        setScores({ ...scores, home: scores.home + 1 });
+      } else {
+        setScores({ ...scores, away: scores.away + 1 });
+      }
+    } else if (type === 'yellow') {
+      setYellowCards([...yellowCards, event]);
+    } else {
+      setRedCards([...redCards, event]);
+    }
+    
+    setNewJersey({ ...newJersey, [type]: '' });
+  };
+
+  const removeEvent = (type: 'goal' | 'yellow' | 'red', index: number) => {
+    if (type === 'goal') {
+      const removed = goalScorers[index];
+      setGoalScorers(goalScorers.filter((_, i) => i !== index));
+      // Auto update score
+      if (removed.team === 'home') {
+        setScores({ ...scores, home: Math.max(0, scores.home - 1) });
+      } else {
+        setScores({ ...scores, away: Math.max(0, scores.away - 1) });
+      }
+    } else if (type === 'yellow') {
+      setYellowCards(yellowCards.filter((_, i) => i !== index));
+    } else {
+      setRedCards(redCards.filter((_, i) => i !== index));
+    }
   };
 
   const handleUpdateScore = async (matchId: string, complete: boolean = false) => {
@@ -168,7 +221,10 @@ export default function ScoresPage() {
       const body: any = { 
         homeScore: scores.home, 
         awayScore: scores.away,
-        liveUrl: scores.liveUrl || null
+        liveUrl: scores.liveUrl || null,
+        goalScorers,
+        yellowCards,
+        redCards,
       };
       if (showPenalty) {
         body.homePenalty = scores.homePen;
@@ -189,6 +245,9 @@ export default function ScoresPage() {
       setSuccess(complete ? 'Match completed!' : 'Score updated');
       setEditingMatch(null);
       setShowPenalty(false);
+      setGoalScorers([]);
+      setYellowCards([]);
+      setRedCards([]);
       fetchMatches();
     } catch (error: any) {
       setError(error.message);
@@ -197,12 +256,11 @@ export default function ScoresPage() {
     }
   };
 
-  // Check if match can be completed (1 minute before end)
   const canComplete = (match: Match) => {
-    if (!match.startedAt) return true; // fallback if no startedAt
+    if (!match.startedAt) return true;
     const startTime = new Date(match.startedAt).getTime();
     const elapsedSeconds = (currentTime - startTime) / 1000;
-    const thresholdSeconds = (matchDuration - 1) * 60; // e.g. 5min duration -> 4min (240s) to enable
+    const thresholdSeconds = (matchDuration - 1) * 60;
     return elapsedSeconds >= thresholdSeconds;
   };
 
@@ -210,13 +268,8 @@ export default function ScoresPage() {
 
   const getRoundLabel = (round: string) => {
     const labels: Record<string, string> = { 
-      group: 'Group Stage', 
-      round32: 'Round of 32', 
-      round16: 'Round of 16', 
-      quarter: 'Quarter Final', 
-      semi: 'Semi Final', 
-      third: '3rd Place', 
-      final: 'Final' 
+      group: 'Group Stage', round32: 'Round of 32', round16: 'Round of 16', 
+      quarter: 'Quarter Final', semi: 'Semi Final', third: '3rd Place', final: 'Final' 
     };
     return labels[round] || round;
   };
@@ -258,7 +311,6 @@ export default function ScoresPage() {
         <h2 className="text-xl sm:text-2xl font-bold text-gray-800">Score Management</h2>
         <div className="text-right text-xs text-gray-400">
           <div>Match: {matchDuration} min</div>
-          <div>Auto-refresh: 30s</div>
         </div>
       </div>
       
@@ -273,11 +325,7 @@ export default function ScoresPage() {
           <button onClick={() => setStatusFilter('completed')} className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm ${statusFilter === 'completed' ? 'bg-green-600 text-white' : 'bg-gray-200'}`}>Done</button>
         </div>
 
-        <select 
-          value={venueFilter} 
-          onChange={(e) => setVenueFilter(e.target.value)}
-          className="px-3 py-1.5 rounded-lg text-xs sm:text-sm border bg-white"
-        >
+        <select value={venueFilter} onChange={(e) => setVenueFilter(e.target.value)} className="px-3 py-1.5 rounded-lg text-xs sm:text-sm border bg-white">
           <option value="all">All Venues</option>
           {venues.map(v => <option key={v} value={v}>{v}</option>)}
         </select>
@@ -292,6 +340,8 @@ export default function ScoresPage() {
         ) : (
           filteredMatches.map((match) => {
             const canCompleteMatch = canComplete(match);
+            const homeGoals = (match.goalScorers || []).filter(g => g.team === 'home');
+            const awayGoals = (match.goalScorers || []).filter(g => g.team === 'away');
             
             return (
               <div key={match._id} className={`bg-white rounded-xl shadow overflow-hidden ${match.status === 'live' ? 'ring-2 ring-red-400' : ''}`}>
@@ -303,7 +353,6 @@ export default function ScoresPage() {
                     <span>{match.venue}</span>
                     <span>|</span>
                     <span className="font-medium text-green-600">{getRoundLabel(match.round)}</span>
-                    {match.matchName && <span className="text-gray-500">({match.matchName})</span>}
                   </div>
                   <div className="flex items-center gap-2">
                     {match.status === 'live' && match.startedAt && (
@@ -320,7 +369,8 @@ export default function ScoresPage() {
 
                 <div className="p-3 sm:p-4">
                   {editingMatch === match._id ? (
-                    <div className="space-y-3">
+                    <div className="space-y-4">
+                      {/* Score Input */}
                       <div className="flex items-center justify-center gap-3 sm:gap-4">
                         <div className="text-center flex-1">
                           <TeamDisplay team={match.homeTeam} placeholder={match.homePlaceholder} />
@@ -345,35 +395,93 @@ export default function ScoresPage() {
                         </div>
                       </div>
 
+                      {/* Goal Scorers */}
+                      <div className="border-t pt-3">
+                        <p className="text-sm font-medium mb-2">⚽ Goal Scorers</p>
+                        <div className="flex gap-1 mb-2">
+                          <input
+                            type="number"
+                            min="1"
+                            placeholder="#"
+                            value={newJersey.goal}
+                            onChange={(e) => setNewJersey({ ...newJersey, goal: e.target.value })}
+                            className="w-14 text-center border rounded py-1 text-sm"
+                          />
+                          <button onClick={() => addEvent('goal', 'home')} className="bg-green-500 text-white px-2 py-1 rounded text-xs">+Home</button>
+                          <button onClick={() => addEvent('goal', 'away')} className="bg-blue-500 text-white px-2 py-1 rounded text-xs">+Away</button>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {goalScorers.map((g, i) => (
+                            <span key={i} className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs ${g.team === 'home' ? 'bg-green-100' : 'bg-blue-100'}`}>
+                              ⚽#{g.jerseyNumber}
+                              <button onClick={() => removeEvent('goal', i)} className="text-red-500 hover:text-red-700">×</button>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Yellow Cards */}
+                      <div className="border-t pt-3">
+                        <p className="text-sm font-medium mb-2">🟨 Yellow Cards</p>
+                        <div className="flex gap-1 mb-2">
+                          <input
+                            type="number"
+                            min="1"
+                            placeholder="#"
+                            value={newJersey.yellow}
+                            onChange={(e) => setNewJersey({ ...newJersey, yellow: e.target.value })}
+                            className="w-14 text-center border rounded py-1 text-sm"
+                          />
+                          <button onClick={() => addEvent('yellow', 'home')} className="bg-green-500 text-white px-2 py-1 rounded text-xs">+Home</button>
+                          <button onClick={() => addEvent('yellow', 'away')} className="bg-blue-500 text-white px-2 py-1 rounded text-xs">+Away</button>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {yellowCards.map((c, i) => (
+                            <span key={i} className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs ${c.team === 'home' ? 'bg-green-100' : 'bg-blue-100'}`}>
+                              🟨#{c.jerseyNumber}
+                              <button onClick={() => removeEvent('yellow', i)} className="text-red-500 hover:text-red-700">×</button>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Red Cards */}
+                      <div className="border-t pt-3">
+                        <p className="text-sm font-medium mb-2">🟥 Red Cards</p>
+                        <div className="flex gap-1 mb-2">
+                          <input
+                            type="number"
+                            min="1"
+                            placeholder="#"
+                            value={newJersey.red}
+                            onChange={(e) => setNewJersey({ ...newJersey, red: e.target.value })}
+                            className="w-14 text-center border rounded py-1 text-sm"
+                          />
+                          <button onClick={() => addEvent('red', 'home')} className="bg-green-500 text-white px-2 py-1 rounded text-xs">+Home</button>
+                          <button onClick={() => addEvent('red', 'away')} className="bg-blue-500 text-white px-2 py-1 rounded text-xs">+Away</button>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {redCards.map((c, i) => (
+                            <span key={i} className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs ${c.team === 'home' ? 'bg-green-100' : 'bg-blue-100'}`}>
+                              🟥#{c.jerseyNumber}
+                              <button onClick={() => removeEvent('red', i)} className="text-red-500 hover:text-red-700">×</button>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
                       {/* Penalty Section */}
                       {isKnockout(match.round) && (
                         <div className="border-t pt-3">
                           <label className="flex items-center gap-2 justify-center text-sm mb-2">
-                            <input 
-                              type="checkbox" 
-                              checked={showPenalty} 
-                              onChange={(e) => setShowPenalty(e.target.checked)}
-                              className="w-4 h-4"
-                            />
+                            <input type="checkbox" checked={showPenalty} onChange={(e) => setShowPenalty(e.target.checked)} className="w-4 h-4" />
                             <span>Penalty Shootout</span>
                           </label>
                           {showPenalty && (
                             <div className="flex items-center justify-center gap-3">
-                              <input
-                                type="number"
-                                min="0"
-                                value={scores.homePen}
-                                onChange={(e) => setScores({ ...scores, homePen: parseInt(e.target.value) || 0 })}
-                                className="w-14 text-center text-lg font-bold border-2 border-purple-300 rounded-lg py-1"
-                              />
+                              <input type="number" min="0" value={scores.homePen} onChange={(e) => setScores({ ...scores, homePen: parseInt(e.target.value) || 0 })} className="w-14 text-center text-lg font-bold border-2 border-purple-300 rounded-lg py-1" />
                               <span className="text-sm text-gray-500">PEN</span>
-                              <input
-                                type="number"
-                                min="0"
-                                value={scores.awayPen}
-                                onChange={(e) => setScores({ ...scores, awayPen: parseInt(e.target.value) || 0 })}
-                                className="w-14 text-center text-lg font-bold border-2 border-purple-300 rounded-lg py-1"
-                              />
+                              <input type="number" min="0" value={scores.awayPen} onChange={(e) => setScores({ ...scores, awayPen: parseInt(e.target.value) || 0 })} className="w-14 text-center text-lg font-bold border-2 border-purple-300 rounded-lg py-1" />
                             </div>
                           )}
                         </div>
@@ -382,47 +490,24 @@ export default function ScoresPage() {
                       {/* Live URL */}
                       <div className="border-t pt-3">
                         <label className="block text-sm text-gray-600 mb-1 text-center">📺 Facebook Live URL</label>
-                        <input
-                          type="url"
-                          value={scores.liveUrl}
-                          onChange={(e) => setScores({ ...scores, liveUrl: e.target.value })}
-                          placeholder="https://facebook.com/..."
-                          className="w-full border rounded-lg px-3 py-2 text-sm"
-                        />
+                        <input type="url" value={scores.liveUrl} onChange={(e) => setScores({ ...scores, liveUrl: e.target.value })} placeholder="https://facebook.com/..." className="w-full border rounded-lg px-3 py-2 text-sm" />
                       </div>
 
+                      {/* Buttons */}
                       <div className="flex justify-center gap-2 pt-2">
-                        <button 
-                          onClick={() => handleUpdateScore(match._id, false)} 
-                          disabled={updating === match._id} 
-                          className="bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-lg disabled:opacity-50 text-sm"
-                        >
-                          Update
-                        </button>
+                        <button onClick={() => handleUpdateScore(match._id, false)} disabled={updating === match._id} className="bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-lg disabled:opacity-50 text-sm">Update</button>
                         <button 
                           onClick={() => handleUpdateScore(match._id, true)} 
                           disabled={updating === match._id || !canCompleteMatch} 
-                          className={`px-3 sm:px-4 py-2 rounded-lg text-sm ${
-                            canCompleteMatch 
-                              ? 'bg-green-600 text-white' 
-                              : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                          }`}
-                          title={!canCompleteMatch ? `Available at ${matchDuration - 1} minutes` : ''}
+                          className={`px-3 sm:px-4 py-2 rounded-lg text-sm ${canCompleteMatch ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}
                         >
                           ✓ Complete
                         </button>
-                        <button 
-                          onClick={() => { setEditingMatch(null); setShowPenalty(false); }} 
-                          className="bg-gray-300 px-3 sm:px-4 py-2 rounded-lg text-sm"
-                        >
-                          Cancel
-                        </button>
+                        <button onClick={() => { setEditingMatch(null); setShowPenalty(false); }} className="bg-gray-300 px-3 sm:px-4 py-2 rounded-lg text-sm">Cancel</button>
                       </div>
                       
                       {!canCompleteMatch && (
-                        <p className="text-center text-xs text-gray-500">
-                          Complete button enables at {matchDuration - 1}:00
-                        </p>
+                        <p className="text-center text-xs text-gray-500">Complete button enables at {matchDuration - 1}:00</p>
                       )}
                     </div>
                   ) : (
@@ -430,15 +515,16 @@ export default function ScoresPage() {
                       <div className="flex items-center justify-center">
                         <div className="flex-1 text-center">
                           <TeamDisplay team={match.homeTeam} placeholder={match.homePlaceholder} />
+                          {homeGoals.length > 0 && (
+                            <p className="text-xs text-gray-500 mt-1">⚽ {homeGoals.map(g => `#${g.jerseyNumber}`).join(', ')}</p>
+                          )}
                         </div>
                         <div className="px-3 sm:px-6">
                           {match.status === 'completed' || match.status === 'live' ? (
                             <div className="text-center">
                               <div className="text-2xl sm:text-3xl font-bold">{match.homeScore} - {match.awayScore}</div>
                               {match.homePenalty !== null && match.homePenalty !== undefined && (
-                                <div className="text-sm text-purple-600 font-medium">
-                                  ({match.homePenalty} - {match.awayPenalty} PEN)
-                                </div>
+                                <div className="text-sm text-purple-600 font-medium">({match.homePenalty} - {match.awayPenalty} PEN)</div>
                               )}
                             </div>
                           ) : (
@@ -448,38 +534,38 @@ export default function ScoresPage() {
                         </div>
                         <div className="flex-1 text-center">
                           <TeamDisplay team={match.awayTeam} placeholder={match.awayPlaceholder} />
+                          {awayGoals.length > 0 && (
+                            <p className="text-xs text-gray-500 mt-1">⚽ {awayGoals.map(g => `#${g.jerseyNumber}`).join(', ')}</p>
+                          )}
                         </div>
                       </div>
 
-                      {/* Live Stream Link */}
+                      {((match.yellowCards && match.yellowCards.length > 0) || (match.redCards && match.redCards.length > 0)) && (
+                        <div className="mt-2 flex justify-center gap-4 text-xs">
+                          {match.yellowCards && match.yellowCards.length > 0 && (
+                            <span>🟨 {match.yellowCards.map(c => `#${c.jerseyNumber}`).join(', ')}</span>
+                          )}
+                          {match.redCards && match.redCards.length > 0 && (
+                            <span>🟥 {match.redCards.map(c => `#${c.jerseyNumber}`).join(', ')}</span>
+                          )}
+                        </div>
+                      )}
+
                       {match.liveUrl && (
                         <div className="mt-2 text-center">
-                          <a 
-                            href={match.liveUrl} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 text-sm"
-                          >
-                            📺 Live Stream
-                          </a>
+                          <a href={match.liveUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 text-sm">📺 Live Stream</a>
                         </div>
                       )}
 
                       <div className="mt-3 sm:mt-4 flex justify-center gap-2 flex-wrap">
                         {match.status === 'scheduled' && (
-                          <button
-                            onClick={() => handleStartMatch(match._id)}
-                            disabled={updating === match._id || !match.homeTeam || !match.awayTeam}
-                            className="bg-green-600 text-white px-4 sm:px-6 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 text-sm"
-                          >
+                          <button onClick={() => handleStartMatch(match._id)} disabled={updating === match._id || !match.homeTeam || !match.awayTeam} className="bg-green-600 text-white px-4 sm:px-6 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 text-sm">
                             {updating === match._id ? 'Starting...' : '▶️ Start Match'}
                           </button>
                         )}
-
                         {match.status === 'live' && (
                           <button onClick={() => handleEditClick(match)} className="bg-orange-500 text-white px-4 sm:px-6 py-2 rounded-lg hover:bg-orange-600 text-sm">⚽ Update Score</button>
                         )}
-
                         {match.status === 'completed' && (
                           <button onClick={() => handleEditClick(match)} className="bg-gray-500 text-white px-4 sm:px-6 py-2 rounded-lg hover:bg-gray-600 text-sm">✏️ Edit</button>
                         )}

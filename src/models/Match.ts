@@ -1,5 +1,10 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
+interface IMatchEvent {
+  team: 'home' | 'away';
+  jerseyNumber: number;
+}
+
 export interface IMatch extends Document {
   homeTeam?: mongoose.Types.ObjectId;
   awayTeam?: mongoose.Types.ObjectId;
@@ -19,7 +24,15 @@ export interface IMatch extends Document {
   status: 'scheduled' | 'live' | 'completed' | 'cancelled';
   startedAt?: Date;
   completedAt?: Date;
+  goalScorers: IMatchEvent[];
+  yellowCards: IMatchEvent[];
+  redCards: IMatchEvent[];
 }
+
+const MatchEventSchema = new Schema({
+  team: { type: String, enum: ['home', 'away'], required: true },
+  jerseyNumber: { type: Number, required: true },
+}, { _id: false });
 
 const MatchSchema = new Schema<IMatch>(
   {
@@ -49,6 +62,9 @@ const MatchSchema = new Schema<IMatch>(
     },
     startedAt: { type: Date },
     completedAt: { type: Date },
+    goalScorers: { type: [MatchEventSchema], default: [] },
+    yellowCards: { type: [MatchEventSchema], default: [] },
+    redCards: { type: [MatchEventSchema], default: [] },
   },
   { timestamps: true }
 );
