@@ -30,6 +30,13 @@ interface PlayerStat {
   count: number;
 }
 
+interface TeamCardStat {
+  teamId: string;
+  teamName: string;
+  jerseyNumbers: number[];
+  totalCount: number;
+}
+
 export default function StatsPage() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
@@ -54,18 +61,14 @@ export default function StatsPage() {
     }
   };
 
-  // Calculate stats
-  const calculateStats = (type: 'goal' | 'yellow' | 'red'): PlayerStat[] => {
+  // Calculate player stats for goals
+  const calculateGoalStats = (): PlayerStat[] => {
     const statsMap: Record<string, PlayerStat> = {};
 
     matches.forEach(match => {
       if (match.status !== 'completed' && match.status !== 'live') return;
 
-      let events: MatchEvent[] = [];
-      if (type === 'goal') events = match.goalScorers || [];
-      else if (type === 'yellow') events = match.yellowCards || [];
-      else events = match.redCards || [];
-
+      const events = match.goalScorers || [];
       events.forEach(event => {
         const team = event.team === 'home' ? match.homeTeam : match.awayTeam;
         if (!team) return;
@@ -86,13 +89,46 @@ export default function StatsPage() {
     return Object.values(statsMap).sort((a, b) => b.count - a.count);
   };
 
-  const topScorers = calculateStats('goal');
-  const yellowCardStats = calculateStats('yellow');
-  const redCardStats = calculateStats('red');
+  // Calculate team-based card stats
+  const calculateTeamCardStats = (type: 'yellow' | 'red'): TeamCardStat[] => {
+    const teamMap: Record<string, { teamId: string; teamName: string; jerseys: number[] }> = {};
+
+    matches.forEach(match => {
+      if (match.status !== 'completed' && match.status !== 'live') return;
+
+      const events = type === 'yellow' ? match.yellowCards || [] : match.redCards || [];
+      events.forEach(event => {
+        const team = event.team === 'home' ? match.homeTeam : match.awayTeam;
+        if (!team) return;
+
+        if (!teamMap[team._id]) {
+          teamMap[team._id] = {
+            teamId: team._id,
+            teamName: team.name,
+            jerseys: [],
+          };
+        }
+        teamMap[team._id].jerseys.push(event.jerseyNumber);
+      });
+    });
+
+    return Object.values(teamMap)
+      .map(t => ({
+        teamId: t.teamId,
+        teamName: t.teamName,
+        jerseyNumbers: t.jerseys,
+        totalCount: t.jerseys.length,
+      }))
+      .sort((a, b) => b.totalCount - a.totalCount);
+  };
+
+  const topScorers = calculateGoalStats();
+  const yellowCardStats = calculateTeamCardStats('yellow');
+  const redCardStats = calculateTeamCardStats('red');
 
   const totalGoals = topScorers.reduce((sum, p) => sum + p.count, 0);
-  const totalYellows = yellowCardStats.reduce((sum, p) => sum + p.count, 0);
-  const totalReds = redCardStats.reduce((sum, p) => sum + p.count, 0);
+  const totalYellows = yellowCardStats.reduce((sum, t) => sum + t.totalCount, 0);
+  const totalReds = redCardStats.reduce((sum, t) => sum + t.totalCount, 0);
 
   if (loading) {
     return (
@@ -186,26 +222,26 @@ export default function StatsPage() {
 
         {activeTab === 'yellow' && (
           <>
-            <div className="bg-yellow-500 text-white px-4 py-3 font-bold">🟨 Yellow Cards</div>
+            <div className="bg-yellow-500 text-white px-4 py-3 font-bold">🟨 Yellow Cards by Team</div>
             {yellowCardStats.length === 0 ? (
               <div className="p-8 text-center text-gray-500">No yellow cards recorded yet</div>
             ) : (
               <table className="w-full">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">#</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Jersey</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Players</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Team</th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500">Cards</th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500">Total</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {yellowCardStats.map((player, idx) => (
-                    <tr key={`${player.teamId}-${player.jerseyNumber}`} className="border-t">
-                      <td className="px-4 py-3 font-medium">{idx + 1}</td>
-                      <td className="px-4 py-3 font-bold text-yellow-600">#{player.jerseyNumber}</td>
-                      <td className="px-4 py-3">{player.teamName}</td>
-                      <td className="px-4 py-3 text-center font-bold">{player.count}</td>
+                  {yellowCardStats.map((team) => (
+                    <tr key={team.teamId} className="border-t">
+                      <td className="px-4 py-3 font-bold text-yellow-600">
+                        {team.jerseyNumbers.map(n => `#${n}`).join(', ')}
+                      </td>
+                      <td className="px-4 py-3">{team.teamName}</td>
+                      <td className="px-4 py-3 text-center font-bold text-lg">{team.totalCount}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -216,26 +252,26 @@ export default function StatsPage() {
 
         {activeTab === 'red' && (
           <>
-            <div className="bg-red-600 text-white px-4 py-3 font-bold">🟥 Red Cards</div>
+            <div className="bg-red-600 text-white px-4 py-3 font-bold">🟥 Red Cards by Team</div>
             {redCardStats.length === 0 ? (
               <div className="p-8 text-center text-gray-500">No red cards recorded yet</div>
             ) : (
               <table className="w-full">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">#</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Jersey</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Players</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Team</th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500">Cards</th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500">Total</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {redCardStats.map((player, idx) => (
-                    <tr key={`${player.teamId}-${player.jerseyNumber}`} className="border-t">
-                      <td className="px-4 py-3 font-medium">{idx + 1}</td>
-                      <td className="px-4 py-3 font-bold text-red-600">#{player.jerseyNumber}</td>
-                      <td className="px-4 py-3">{player.teamName}</td>
-                      <td className="px-4 py-3 text-center font-bold">{player.count}</td>
+                  {redCardStats.map((team) => (
+                    <tr key={team.teamId} className="border-t">
+                      <td className="px-4 py-3 font-bold text-red-600">
+                        {team.jerseyNumbers.map(n => `#${n}`).join(', ')}
+                      </td>
+                      <td className="px-4 py-3">{team.teamName}</td>
+                      <td className="px-4 py-3 text-center font-bold text-lg">{team.totalCount}</td>
                     </tr>
                   ))}
                 </tbody>
