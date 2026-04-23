@@ -290,9 +290,20 @@ export default function ScoresPage() {
     
     return statusMatch && venueMatch;
   }).sort((a, b) => {
+    // Live matches first
     if (a.status === 'live' && b.status !== 'live') return -1;
     if (b.status === 'live' && a.status !== 'live') return 1;
-    return new Date(a.matchDate).getTime() - new Date(b.matchDate).getTime();
+    
+    // Then by date
+    const dateDiff = new Date(a.matchDate).getTime() - new Date(b.matchDate).getTime();
+    if (dateDiff !== 0) return dateDiff;
+    
+    // Then by time
+    const parseTime = (time: string) => {
+      const [h, m] = (time || '00:00').split(':').map(Number);
+      return h * 60 + m;
+    };
+    return parseTime(a.matchTime) - parseTime(b.matchTime);
   });
 
   const liveCount = matches.filter(m => m.status === 'live').length;

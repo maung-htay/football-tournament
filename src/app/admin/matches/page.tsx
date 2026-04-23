@@ -40,6 +40,7 @@ export default function MatchesPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [showGenerate, setShowGenerate] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [showBracket, setShowBracket] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -48,6 +49,22 @@ export default function MatchesPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [activeTab, setActiveTab] = useState<'list' | 'bracket'>('list');
+
+  // Import state
+  const [importDate, setImportDate] = useState('');
+  const [importData, setImportData] = useState('');
+  const [importPreview, setImportPreview] = useState<{
+    time: string;
+    venue: string;
+    homeTeam: string;
+    awayTeam: string;
+    homeTeamId: string | null;
+    awayTeamId: string | null;
+    groupId: string | null;
+    groupName: string;
+    error: string | null;
+  }[]>([]);
+  const [importParsed, setImportParsed] = useState(false);
 
   const [formData, setFormData] = useState({
     round: 'group',
@@ -339,12 +356,165 @@ export default function MatchesPage() {
     }
   };
 
-  // Sort matches - live first, then scheduled, then completed
+  // Import Preview
+  const handleImportPreview = () => {
+    setError('');
+    const lines = importData.trim().split('\n');
+    if (lines.length < 2) {
+      setError('Need at least header row and one data row');
+      return;
+    }
+
+    // Parse header to get venue names
+    const header = lines[0].split('\t');
+    const venues: string[] = [];
+    for (let i = 1; i < header.length; i++) {
+      // Extract venue letter from "COURT A" -> "A"
+      const match = header[i].match(/COURT\s*([A-Z])/i);
+      venues.push(match ? match[1].toUpperCase() : header[i].trim());
+    }
+
+    const preview: typeof importPreview = [];
+
+    // Parse data rows
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split('\t');
+      if (cols.length < 2) continue;
+
+      // Parse time: "8:30-8:42" -> "8:30"
+      const timeMatch = cols[0].match(/^(\d{1,2}:\d{2})/);
+      const time = timeMatch ? timeMatch[1] : cols[0].trim();
+
+      // Parse each venue column
+      for (let j = 1; j < cols.length && j <= venues.length; j++) {
+        const matchup = cols[j]?.trim();
+        if (!matchup || matchup === '-' || matchup === '') continue;
+
+        // Parse "Team A - Team B"
+        const teamParts = matchup.split(' - ');
+        if (teamParts.length !== 2) {
+          preview.push({
+            time,
+            venue: venues[j - 1] || `V${j}`,
+            homeTeam: matchup,
+            awayTeam: '',
+            homeTeamId: null,
+            awayTeamId: null,
+            groupId: null,
+            groupName: '',
+            error: 'Invalid format (use "Team A - Team B")',
+          });
+          continue;
+        }
+
+        const homeTeamName = teamParts[0].trim();
+        const awayTeamName = teamParts[1].trim();
+
+        // Find teams in database
+        const homeTeam = teams.find(t => t.name.toLowerCase() === homeTeamName.toLowerCase());
+        const awayTeam = teams.find(t => t.name.toLowerCase() === awayTeamName.toLowerCase());
+
+        // Find group if both teams are in same group
+        let groupId: string | null = null;
+        let groupName = '';
+        if (homeTeam && awayTeam) {
+          for (const group of groups) {
+            const homeInGroup = group.teams.some(t => t._id === homeTeam._id);
+            const awayInGroup = group.teams.some(t => t._id === awayTeam._id);
+            if (homeInGroup && awayInGroup) {
+              groupId = group._id;
+              groupName = group.name;
+              break;
+            }
+          }
+        }
+
+        let error: string | null = null;
+        if (!homeTeam && !awayTeam) {
+          error = `"${homeTeamName}" and "${awayTeamName}" not found`;
+        } else if (!homeTeam) {
+          error = `"${homeTeamName}" not found`;
+        } else if (!awayTeam) {
+          error = `"${awayTeamName}" not found`;
+        }
+
+        preview.push({
+          time,
+          venue: venues[j - 1] || `V${j}`,
+          homeTeam: homeTeamName,
+          awayTeam: awayTeamName,
+          homeTeamId: homeTeam?._id || null,
+          awayTeamId: awayTeam?._id || null,
+          groupId,
+          groupName,
+          error,
+        });
+      }
+    }
+
+    setImportPreview(preview);
+    setImportParsed(true);
+  };
+
+  // Import Save
+  const handleImportSave = async () => {
+    const validMatches = importPreview.filter(r => !r.error);
+    if (validMatches.length === 0) return;
+
+    setSaving(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      // Create matches one by one
+      let created = 0;
+      for (const match of validMatches) {
+        const payload = {
+          homeTeam: match.homeTeamId,
+          awayTeam: match.awayTeamId,
+          groupId: match.groupId,
+          round: 'group',
+          venue: match.venue,
+          matchDate: importDate,
+          matchTime: match.time,
+          status: 'scheduled',
+        };
+
+        const res = await fetch('/api/matches', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (res.ok) created++;
+      }
+
+      setSuccess(`Successfully created ${created} matches`);
+      setShowImport(false);
+      setImportPreview([]);
+      setImportParsed(false);
+      setImportData('');
+      setImportDate('');
+      fetchData();
+    } catch (error: any) {
+      setError(error.message || 'Failed to save matches');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Sort matches - by date and time (earliest first)
   const sortedMatches = [...matches].sort((a, b) => {
-    const statusOrder: Record<string, number> = { live: 0, scheduled: 1, completed: 2, cancelled: 3 };
-    const statusDiff = statusOrder[a.status] - statusOrder[b.status];
-    if (statusDiff !== 0) return statusDiff;
-    return new Date(a.matchDate).getTime() - new Date(b.matchDate).getTime();
+    // First by date
+    const dateDiff = new Date(a.matchDate).getTime() - new Date(b.matchDate).getTime();
+    if (dateDiff !== 0) return dateDiff;
+    
+    // Then by time - convert to minutes for proper comparison
+    const parseTime = (time: string) => {
+      const [h, m] = (time || '00:00').split(':').map(Number);
+      return h * 60 + m;
+    };
+    return parseTime(a.matchTime) - parseTime(b.matchTime);
   });
 
   if (loading) return <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-800"></div></div>;
@@ -354,7 +524,8 @@ export default function MatchesPage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
         <h2 className="text-xl sm:text-2xl font-bold text-gray-800">Match Management</h2>
         <div className="flex gap-2 w-full sm:w-auto flex-wrap">
-          <button onClick={() => { setShowGenerate(!showGenerate); setShowForm(false); }} className="flex-1 sm:flex-none bg-green-600 text-white px-3 py-2 rounded-lg text-sm">⚡ Auto</button>
+          <button onClick={() => { setShowGenerate(!showGenerate); setShowForm(false); setShowImport(false); }} className="flex-1 sm:flex-none bg-green-600 text-white px-3 py-2 rounded-lg text-sm">⚡ Auto</button>
+          <button onClick={() => { setShowImport(!showImport); setShowForm(false); setShowGenerate(false); setImportPreview([]); setImportParsed(false); }} className="flex-1 sm:flex-none bg-orange-500 text-white px-3 py-2 rounded-lg text-sm">📥 Import</button>
           <button onClick={handleAddNew} className="flex-1 sm:flex-none bg-blue-600 text-white px-3 py-2 rounded-lg text-sm">+ Add</button>
           {hasUnresolvedPlaceholders && (
             <button 
@@ -430,6 +601,126 @@ export default function MatchesPage() {
             <button type="button" onClick={() => setShowGenerate(false)} className="bg-gray-300 px-4 py-2 rounded-lg text-sm">Cancel</button>
           </div>
         </form>
+      )}
+
+      {/* Import Matches Form */}
+      {showImport && (
+        <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
+          <h3 className="text-lg font-bold mb-3">📥 Import Matches from Schedule</h3>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Match Date</label>
+              <input 
+                type="date" 
+                value={importDate} 
+                onChange={(e) => setImportDate(e.target.value)} 
+                className="w-full border rounded-lg px-3 py-2 text-sm" 
+                required 
+              />
+            </div>
+          </div>
+
+          <div className="mb-3">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Paste Schedule Data (Tab-separated)
+            </label>
+            <textarea
+              value={importData}
+              onChange={(e) => setImportData(e.target.value)}
+              placeholder={`TIME\tCOURT A\tCOURT B\tCOURT C
+8:30-8:42\tTeam A - Team B\tTeam C - Team D\tTeam E - Team F
+8:45-8:57\tTeam G - Team H\tTeam I - Team J\tTeam K - Team L`}
+              className="w-full border rounded-lg px-3 py-2 text-sm font-mono h-32"
+            />
+          </div>
+
+          <div className="flex gap-2 mb-4">
+            <button 
+              type="button" 
+              onClick={handleImportPreview}
+              disabled={!importDate || !importData.trim()}
+              className="bg-orange-500 text-white px-4 py-2 rounded-lg disabled:opacity-50 text-sm"
+            >
+              🔍 Preview
+            </button>
+            <button 
+              type="button" 
+              onClick={() => { setShowImport(false); setImportPreview([]); setImportParsed(false); setImportData(''); }} 
+              className="bg-gray-300 px-4 py-2 rounded-lg text-sm"
+            >
+              Cancel
+            </button>
+          </div>
+
+          {/* Preview Table */}
+          {importParsed && importPreview.length > 0 && (
+            <div className="bg-white rounded-lg overflow-hidden border">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-100">
+                  <tr>
+                    <th className="px-3 py-2 text-left">Time</th>
+                    <th className="px-3 py-2 text-left">Venue</th>
+                    <th className="px-3 py-2 text-left">Home</th>
+                    <th className="px-3 py-2 text-left">Away</th>
+                    <th className="px-3 py-2 text-left">Group</th>
+                    <th className="px-3 py-2 text-center">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {importPreview.map((row, idx) => (
+                    <tr key={idx} className={`border-t ${row.error ? 'bg-red-50' : 'bg-green-50'}`}>
+                      <td className="px-3 py-2">{row.time}</td>
+                      <td className="px-3 py-2">{row.venue}</td>
+                      <td className="px-3 py-2">
+                        <span className={row.homeTeamId ? 'text-green-700' : 'text-red-600 font-medium'}>
+                          {row.homeTeam}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2">
+                        <span className={row.awayTeamId ? 'text-green-700' : 'text-red-600 font-medium'}>
+                          {row.awayTeam}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2">{row.groupName || '-'}</td>
+                      <td className="px-3 py-2 text-center">
+                        {row.error ? (
+                          <span className="text-red-600 text-xs">❌ {row.error}</span>
+                        ) : (
+                          <span className="text-green-600">✅</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {/* Summary */}
+              <div className="p-3 bg-gray-50 border-t flex justify-between items-center">
+                <div className="text-sm">
+                  <span className="text-green-600 font-medium">✅ {importPreview.filter(r => !r.error).length}</span>
+                  {' / '}
+                  <span className="text-gray-600">{importPreview.length} matches</span>
+                  {importPreview.some(r => r.error) && (
+                    <span className="text-red-600 ml-2">❌ {importPreview.filter(r => r.error).length} errors</span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleImportSave}
+                  disabled={saving || importPreview.some(r => r.error)}
+                  className={`px-4 py-2 rounded-lg text-sm ${
+                    importPreview.some(r => r.error) 
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                      : 'bg-green-600 text-white'
+                  }`}
+                >
+                  {saving ? 'Saving...' : `💾 Save ${importPreview.filter(r => !r.error).length} Matches`}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
       {/* Add/Edit Match Form */}
