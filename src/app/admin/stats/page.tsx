@@ -42,11 +42,20 @@ export default function StatsPage() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'goals' | 'yellow' | 'red'>('goals');
 
+  // Check if there are live matches
+  const hasLiveMatches = matches.some(m => m.status === 'live');
+
   useEffect(() => {
     fetchMatches();
+  }, []);
+
+  // Auto refresh only when live matches exist
+  useEffect(() => {
+    if (!hasLiveMatches) return;
+    
     const interval = setInterval(fetchMatches, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [hasLiveMatches]);
 
   const fetchMatches = async () => {
     try {

@@ -89,12 +89,20 @@ export default function MatchesPage() {
     restBetweenGames: 2,
   });
 
+  // Check if there are live matches
+  const hasLiveMatches = matches.some(m => m.status === 'live');
+
   useEffect(() => {
     fetchData();
-    // Auto refresh every 30 seconds
+  }, []);
+
+  // Auto refresh only when live matches exist
+  useEffect(() => {
+    if (!hasLiveMatches) return;
+    
     const interval = setInterval(fetchData, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [hasLiveMatches]);
 
   const fetchData = async () => {
     try {

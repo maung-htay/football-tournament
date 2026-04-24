@@ -98,16 +98,23 @@ export default function ScoresPage() {
   const [redCards, setRedCards] = useState<MatchEvent[]>([]);
   const [newJersey, setNewJersey] = useState<{ goal: string; yellow: string; red: string }>({ goal: '', yellow: '', red: '' });
 
+  // Check if there are live matches
+  const hasLiveMatches = matches.some(m => m.status === 'live');
+
   useEffect(() => {
     fetchMatches();
     fetchSettings();
-    const matchInterval = setInterval(fetchMatches, 30000);
     const timeInterval = setInterval(() => setCurrentTime(Date.now()), 1000);
-    return () => {
-      clearInterval(matchInterval);
-      clearInterval(timeInterval);
-    };
+    return () => clearInterval(timeInterval);
   }, []);
+
+  // Auto refresh only when live matches exist
+  useEffect(() => {
+    if (!hasLiveMatches) return;
+    
+    const interval = setInterval(fetchMatches, 30000);
+    return () => clearInterval(interval);
+  }, [hasLiveMatches]);
 
   const fetchSettings = async () => {
     try {

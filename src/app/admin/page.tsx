@@ -8,6 +8,7 @@ interface Stats {
   totalGroups: number;
   totalMatches: number;
   completedMatches: number;
+  liveMatches: number;
 }
 
 export default function AdminDashboard() {
@@ -16,15 +17,21 @@ export default function AdminDashboard() {
     totalGroups: 0,
     totalMatches: 0,
     completedMatches: 0,
+    liveMatches: 0,
   });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchStats();
-    // Auto refresh every 30 seconds
+  }, []);
+
+  // Auto refresh only when live matches exist
+  useEffect(() => {
+    if (stats.liveMatches === 0) return;
+    
     const interval = setInterval(fetchStats, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [stats.liveMatches]);
 
   const fetchStats = async () => {
     try {
@@ -46,6 +53,7 @@ export default function AdminDashboard() {
         totalGroups: groupsArr.length,
         totalMatches: matchesArr.length,
         completedMatches: matchesArr.filter((m: any) => m.status === 'completed').length,
+        liveMatches: matchesArr.filter((m: any) => m.status === 'live').length,
       });
     } catch (error) {
       console.error('Failed to fetch stats:', error);
