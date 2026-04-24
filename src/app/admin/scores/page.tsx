@@ -97,6 +97,10 @@ export default function ScoresPage() {
   const [yellowCards, setYellowCards] = useState<MatchEvent[]>([]);
   const [redCards, setRedCards] = useState<MatchEvent[]>([]);
   const [newJersey, setNewJersey] = useState<{ goal: string; yellow: string; red: string }>({ goal: '', yellow: '', red: '' });
+  
+  // Confirmation dialog state
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [confirmMatchId, setConfirmMatchId] = useState<string | null>(null);
 
   // Check if there are live matches
   const hasLiveMatches = matches.some(m => m.status === 'live');
@@ -267,8 +271,26 @@ export default function ScoresPage() {
     if (!match.startedAt) return true;
     const startTime = new Date(match.startedAt).getTime();
     const elapsedSeconds = (currentTime - startTime) / 1000;
-    const thresholdSeconds = (matchDuration - 1) * 60;
+    const thresholdSeconds = 8 * 60; // 8 minutes
     return elapsedSeconds >= thresholdSeconds;
+  };
+
+  const handleCompleteClick = (matchId: string) => {
+    setConfirmMatchId(matchId);
+    setShowConfirm(true);
+  };
+
+  const handleConfirmComplete = async () => {
+    if (confirmMatchId) {
+      await handleUpdateScore(confirmMatchId, true);
+    }
+    setShowConfirm(false);
+    setConfirmMatchId(null);
+  };
+
+  const handleCancelConfirm = () => {
+    setShowConfirm(false);
+    setConfirmMatchId(null);
   };
 
   const formatDate = (dateStr: string) => new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -325,6 +347,31 @@ export default function ScoresPage() {
 
   return (
     <div className="space-y-4">
+      {/* Confirmation Dialog */}
+      {showConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 max-w-sm mx-4 shadow-xl">
+            <h3 className="text-lg font-bold text-gray-800 mb-3">Confirm Complete</h3>
+            <p className="text-gray-600 mb-6">Are you sure you want to complete this match?</p>
+            <div className="flex justify-end gap-3">
+              <button 
+                onClick={handleCancelConfirm}
+                className="px-4 py-2 rounded-lg bg-gray-200 text-gray-700 text-sm"
+              >
+                No
+              </button>
+              <button 
+                onClick={handleConfirmComplete}
+                disabled={updating !== null}
+                className="px-4 py-2 rounded-lg bg-green-600 text-white text-sm disabled:opacity-50"
+              >
+                {updating ? 'Completing...' : 'Yes, Complete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex justify-between items-center">
         <h2 className="text-xl sm:text-2xl font-bold text-gray-800">Score Management</h2>
         <div className="text-right text-xs text-gray-400">
@@ -515,7 +562,7 @@ export default function ScoresPage() {
                       <div className="flex justify-center gap-2 pt-2">
                         <button onClick={() => handleUpdateScore(match._id, false)} disabled={updating === match._id} className="bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-lg disabled:opacity-50 text-sm">Update</button>
                         <button 
-                          onClick={() => handleUpdateScore(match._id, true)} 
+                          onClick={() => handleCompleteClick(match._id)} 
                           disabled={updating === match._id || !canCompleteMatch} 
                           className={`px-3 sm:px-4 py-2 rounded-lg text-sm ${canCompleteMatch ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}
                         >
@@ -525,7 +572,7 @@ export default function ScoresPage() {
                       </div>
                       
                       {!canCompleteMatch && (
-                        <p className="text-center text-xs text-gray-500">Complete button enables at {matchDuration - 1}:00</p>
+                        <p className="text-center text-xs text-gray-500">Complete button enables at 8:00</p>
                       )}
                     </div>
                   ) : (
