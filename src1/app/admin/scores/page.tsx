@@ -165,41 +165,6 @@ export default function ScoresPage() {
     }
   };
 
-  const handleReverseMatch = async (matchId: string) => {
-    if (!confirm('Reverse this match to Scheduled? All scores and events will be reset.')) return;
-    
-    setUpdating(matchId);
-    setError('');
-    setSuccess('');
-
-    try {
-      const res = await fetch(`/api/matches/${matchId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          status: 'scheduled', 
-          homeScore: null, 
-          awayScore: null,
-          homePenalty: null,
-          awayPenalty: null,
-          startedAt: null,
-          goalScorers: [],
-          yellowCards: [],
-          redCards: []
-        }),
-      });
-
-      if (!res.ok) throw new Error('Failed to reverse match');
-      setSuccess('Match reversed to Scheduled!');
-      setEditingMatch(null);
-      fetchMatches();
-    } catch (error: any) {
-      setError(error.message);
-    } finally {
-      setUpdating(null);
-    }
-  };
-
   const handleEditClick = (match: Match) => {
     setEditingMatch(match._id);
     setScores({ 
@@ -594,7 +559,7 @@ export default function ScoresPage() {
                       </div>
 
                       {/* Buttons */}
-                      <div className="flex justify-center gap-2 pt-2 flex-wrap">
+                      <div className="flex justify-center gap-2 pt-2">
                         <button onClick={() => handleUpdateScore(match._id, false)} disabled={updating === match._id} className="bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-lg disabled:opacity-50 text-sm">Update</button>
                         <button 
                           onClick={() => handleCompleteClick(match._id)} 
@@ -602,13 +567,6 @@ export default function ScoresPage() {
                           className={`px-3 sm:px-4 py-2 rounded-lg text-sm ${canCompleteMatch ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}
                         >
                           ✓ Complete
-                        </button>
-                        <button 
-                          onClick={() => handleReverseMatch(match._id)} 
-                          disabled={updating === match._id} 
-                          className="bg-orange-500 text-white px-3 sm:px-4 py-2 rounded-lg disabled:opacity-50 text-sm"
-                        >
-                          ↩ Reverse
                         </button>
                         <button onClick={() => { setEditingMatch(null); setShowPenalty(false); }} className="bg-gray-300 px-3 sm:px-4 py-2 rounded-lg text-sm">Cancel</button>
                       </div>

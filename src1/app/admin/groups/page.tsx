@@ -60,8 +60,8 @@ export default function GroupsPage() {
   const fetchData = async () => {
     try {
       const [groupsRes, teamsRes] = await Promise.all([
-        fetch('/api/groups', { cache: 'no-store' }),
-        fetch('/api/teams', { cache: 'no-store' }),
+        fetch('/api/groups'),
+        fetch('/api/teams'),
       ]);
       const groupsData = await groupsRes.json();
       const teamsData = await teamsRes.json();
@@ -80,16 +80,18 @@ export default function GroupsPage() {
       // 1. Sort by points first
       if (b.points !== a.points) return b.points - a.points;
       
-      // 2. If points equal and both have manualRank, use manualRank
-      if (a.manualRank && b.manualRank) return a.manualRank - b.manualRank;
-      
-      // 3. Then goal difference (if no manualRank)
+      // 2. Then goal difference
       const gdA = a.goalsFor - a.goalsAgainst;
       const gdB = b.goalsFor - b.goalsAgainst;
       if (gdB !== gdA) return gdB - gdA;
       
-      // 4. Then goals for
+      // 3. Then goals for
       if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor;
+      
+      // 4. If all equal, use manualRank (tiebreaker)
+      if (a.manualRank && b.manualRank) return a.manualRank - b.manualRank;
+      if (a.manualRank) return -1;
+      if (b.manualRank) return 1;
       
       return 0;
     });

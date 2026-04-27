@@ -49,10 +49,6 @@ export default function MatchesPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [activeTab, setActiveTab] = useState<'list' | 'bracket'>('list');
-  
-  // Filter states
-  const [filterGroup, setFilterGroup] = useState<string>('all');
-  const [filterRound, setFilterRound] = useState<string>('all');
 
   // Import state
   const [importDate, setImportDate] = useState('');
@@ -515,29 +511,9 @@ export default function MatchesPage() {
     }
   };
 
-  // Get unique rounds for filter
-  const uniqueRounds = [...new Set(matches.map(m => m.round))];
-
-  // Filter and sort matches
-  const filteredMatches = matches.filter(match => {
-    // Group filter
-    if (filterGroup === 'knockout') {
-      if (match.groupId) return false; // knockout matches have no groupId
-    } else if (filterGroup !== 'all') {
-      if (match.groupId?._id !== filterGroup) return false;
-    }
-    // Round filter
-    if (filterRound !== 'all' && match.round !== filterRound) return false;
-    return true;
-  });
-
-  const sortedMatches = [...filteredMatches].sort((a, b) => {
-    // First by status priority: Live > Scheduled > Completed
-    const statusOrder: Record<string, number> = { live: 0, scheduled: 1, completed: 2 };
-    const statusDiff = (statusOrder[a.status] ?? 1) - (statusOrder[b.status] ?? 1);
-    if (statusDiff !== 0) return statusDiff;
-    
-    // Then by date
+  // Sort matches - by date and time (earliest first)
+  const sortedMatches = [...matches].sort((a, b) => {
+    // First by date
     const dateDiff = new Date(a.matchDate).getTime() - new Date(b.matchDate).getTime();
     if (dateDiff !== 0) return dateDiff;
     
@@ -936,34 +912,6 @@ export default function MatchesPage() {
       {/* List View */}
       {activeTab === 'list' && (
         <>
-          {/* Filters */}
-          <div className="flex flex-wrap gap-2 bg-white rounded-lg p-3 shadow">
-            <select
-              value={filterGroup}
-              onChange={(e) => setFilterGroup(e.target.value)}
-              className="border rounded-lg px-3 py-2 text-sm"
-            >
-              <option value="all">All Groups</option>
-              {groups.map(g => (
-                <option key={g._id} value={g._id}>{g.name}</option>
-              ))}
-              <option value="knockout">Knockout</option>
-            </select>
-            <select
-              value={filterRound}
-              onChange={(e) => setFilterRound(e.target.value)}
-              className="border rounded-lg px-3 py-2 text-sm"
-            >
-              <option value="all">All Rounds</option>
-              {uniqueRounds.map(r => (
-                <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1).replace('_', ' ')}</option>
-              ))}
-            </select>
-            <span className="text-sm text-gray-500 self-center ml-2">
-              {sortedMatches.length} / {matches.length} matches
-            </span>
-          </div>
-
           {/* Mobile Cards */}
           <div className="block sm:hidden space-y-3">
             {sortedMatches.length === 0 ? (

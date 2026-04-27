@@ -29,11 +29,7 @@ export async function PUT(
     if (!team) {
       return NextResponse.json({ error: 'Team not found' }, { status: 404 });
     }
-    return NextResponse.json(team, {
-      headers: {
-        'Cache-Control': 'no-store, no-cache, must-revalidate',
-      }
-    });
+    return NextResponse.json(team);
   } catch (error) {
     return NextResponse.json({ error: 'Failed to update team' }, { status: 500 });
   }

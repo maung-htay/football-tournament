@@ -8,17 +8,10 @@ export async function GET() {
     await dbConnect();
     const groups = await Group.find({}).populate({
       path: 'teams',
-      model: Team,
-      select: 'name shortName logoUrl played won drawn lost goalsFor goalsAgainst points manualRank'
-    }).lean();
-    
-    return NextResponse.json(groups, {
-      headers: {
-        'Cache-Control': 'no-store, no-cache, must-revalidate',
-      }
+      options: { sort: { points: -1, goalsFor: -1 } }
     });
+    return NextResponse.json(groups);
   } catch (error) {
-    console.error('Failed to fetch groups:', error);
     return NextResponse.json({ error: 'Failed to fetch groups' }, { status: 500 });
   }
 }
