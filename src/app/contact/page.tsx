@@ -22,7 +22,7 @@ export default function ContactPage() {
           <h1 className="mb-4 text-2xl font-bold text-gray-800 sm:text-3xl">Contact Us</h1>
 
           <p className="mb-8 leading-relaxed text-gray-600">
-            ဒီ website ကို သုံးချင်တဲ့ ညီအကိုမောင်နှမများခင်ဗျာ<br />
+            ဒီ website ကို မိမိတို့ပြိုင်းပွဲအတွက် သုံးချင်တဲ့ ညီအကိုမောင်နှမများခင်ဗျာ<br />
             ဘယ်နိုင်ငံကဖြစ်ဖြစ် ဆက်သွယ်မေးမြန်းနိုင်ပါတယ် ခင်ဗျာ
 
           </p>
