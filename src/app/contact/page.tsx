@@ -1,9 +1,49 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 
 export default function ContactPage() {
   const messengerUrl = process.env.NEXT_PUBLIC_MESSENGER_URL || '';
+  const [isIOS, setIsIOS] = useState(false);
+
+  useEffect(() => {
+    // Detect iOS device
+    const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    setIsIOS(iOS);
+  }, []);
+
+  // Convert m.me link to appropriate format
+  const getMessengerLink = () => {
+    if (!messengerUrl) return '';
+    
+    // Extract username/page-id from m.me URL
+    const match = messengerUrl.match(/m\.me\/(.+)/);
+    const pageId = match ? match[1] : messengerUrl.replace('https://', '').replace('http://', '');
+    
+    if (isIOS) {
+      // iOS: Try fb-messenger scheme first, fallback to Facebook app
+      return `fb-messenger://user-thread/${pageId}`;
+    }
+    // Android/Desktop: Use m.me
+    return `https://m.me/${pageId}`;
+  };
+
+  const handleMessengerClick = (e: React.MouseEvent) => {
+    if (isIOS) {
+      e.preventDefault();
+      const pageMatch = messengerUrl.match(/m\.me\/(.+)/);
+      const pageId = pageMatch ? pageMatch[1] : '';
+      
+      // Try Messenger app first
+      window.location.href = `fb-messenger://user-thread/${pageId}`;
+      
+      // Fallback to web after delay
+      setTimeout(() => {
+        window.location.href = `https://www.messenger.com/t/${pageId}`;
+      }, 1500);
+    }
+  };
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-green-50 to-white">
@@ -28,7 +68,8 @@ export default function ContactPage() {
 
           {messengerUrl ? (
             <a
-              href={messengerUrl}
+              href={getMessengerLink()}
+              onClick={handleMessengerClick}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center justify-center gap-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl py-4 px-8 transition transform hover:scale-105 shadow-lg"
