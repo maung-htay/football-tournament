@@ -53,11 +53,19 @@ interface Match {
   redCards?: MatchEvent[];
 }
 
-// Team display component - uses full name only
+// Team display component - uses full name with logo
 const TeamDisplay = ({ team, placeholder }: { team?: Team | null; placeholder?: string }) => {
   if (team) {
     return (
       <div className="flex flex-col items-center text-center">
+        {team.logoUrl && (
+          <img
+            src={team.logoUrl}
+            alt={team.name}
+            className="object-contain mb-1 rounded-full h-11 w-11 sm:w-12 sm:h-12"
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+          />
+        )}
         <p className="text-sm font-bold leading-tight sm:text-base">{team.name}</p>
       </div>
     );
@@ -66,6 +74,9 @@ const TeamDisplay = ({ team, placeholder }: { team?: Team | null; placeholder?: 
   if (placeholder) {
     return (
       <div className="flex flex-col items-center text-center">
+        <div className="flex items-center justify-center w-10 h-10 mb-1 bg-gray-200 rounded-full sm:w-12 sm:h-12">
+          <span className="text-xs text-gray-400">?</span>
+        </div>
         <p className="text-sm font-medium text-gray-500 sm:text-base">{placeholder}</p>
       </div>
     );
@@ -352,7 +363,7 @@ export default function Home() {
       <header className="text-white bg-green-600 shadow-lg">
         <div className="max-w-6xl px-4 py-4 mx-auto sm:py-6">
           <div className="flex items-center justify-between">
-            <h1 className="text-xl font-bold sm:text-2xl">⚽ Sagaing Revolution Cup</h1>
+            <h1 className="text-xl font-bold sm:text-2xl">⚽ Football Tournament</h1>
             {showContact && (
               <Link href="/contact" className="text-sm text-green-100 hover:text-white">
                 📞 Contact
@@ -622,7 +633,19 @@ export default function Home() {
                           .map((team, idx) => (
                             <tr key={team._id} className={`border-t ${idx < 2 ? 'bg-green-50' : ''}`}>
                               <td className="px-2 py-2 sm:px-3">
-                                <span className="font-medium">{team.name}</span>
+                                <div className="flex items-center gap-2">
+                                  {team.logoUrl ? (
+                                    <img
+                                      src={team.logoUrl}
+                                      alt={team.name}
+                                      className="flex-shrink-0 object-contain w-6 h-6 rounded-full"
+                                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                    />
+                                  ) : (
+                                    <div className="flex-shrink-0 w-6 h-6 bg-gray-200 rounded-full"></div>
+                                  )}
+                                  <span className="font-medium">{team.name}</span>
+                                </div>
                               </td>
                               <td className="px-1 py-2 text-center sm:px-2">{team.played}</td>
                               <td className="px-1 py-2 text-center sm:px-2">{team.won}</td>
@@ -675,8 +698,8 @@ export default function Home() {
                         <div
                           key={match._id}
                           className={`rounded-lg p-3 w-56 border-l-4 ${match.status === 'completed' ? 'bg-green-50 border-green-500' :
-                              match.status === 'live' ? 'bg-red-50 border-red-500' :
-                                'bg-gray-50 border-gray-300'
+                            match.status === 'live' ? 'bg-red-50 border-red-500' :
+                              'bg-gray-50 border-gray-300'
                             }`}
                         >
                           {match.matchName && <p className="mb-1 text-xs text-gray-500">{match.matchName}</p>}
@@ -728,8 +751,8 @@ export default function Home() {
                     <div
                       key={match._id}
                       className={`rounded-lg p-3 w-52 border-l-4 ${match.status === 'completed' ? 'bg-amber-50 border-amber-500' :
-                          match.status === 'live' ? 'bg-red-50 border-red-500' :
-                            'bg-gray-50 border-gray-300'
+                        match.status === 'live' ? 'bg-red-50 border-red-500' :
+                          'bg-gray-50 border-gray-300'
                         }`}
                     >
                       <div className="flex justify-between text-sm font-medium">
