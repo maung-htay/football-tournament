@@ -22,6 +22,10 @@ export default function ContactPage() {
           <h1 className="mb-4 text-2xl font-bold text-gray-800 sm:text-3xl">Contact Us</h1>
 
           <p className="mb-8 leading-relaxed text-gray-600">
+            New Force ကနေ ကျင်းပတဲ့ Sagaing Revolution Cup မှာ <br />
+            အောင်မြင်စွာ စမ်းသပ်အသုံးပြီးခဲ့ပြီး ပြိင်းပွဲး၀င်အသင်းတွေရဲ့ <br />
+            အသင်းအချိန်, ကန်မယ့်ကွင်း, အဆင့်ရပ်တည်မှု တွေ ကို  <br />
+            လွယ်လင့်တကူ စစ်ဆေးနိုင်တဲ့ website ဖြစ်ပါတယ်။ <br />
             ဒီ website ကို မိမိတို့ပြိုင်းပွဲအတွက် သုံးချင်တဲ့ ညီအကိုမောင်နှမများခင်ဗျာ<br />
             ဘယ်နိုင်ငံကဖြစ်ဖြစ် ဆက်သွယ်မေးမြန်းနိုင်ပါတယ် ခင်ဗျာ
 
