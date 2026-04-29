@@ -34,3 +34,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+.dockerignore
+docker-compose.yml
+Dockerfile
+/nginx
+.gitignore
+DEPLOY.md
+mongo-init.js
+.gitkeep

@@ -1,0 +1,23 @@
+#!/bin/bash
+
+# Update system
+apt-get update -y
+apt-get upgrade -y
+
+# Install Docker
+curl -fsSL https://get.docker.com -o get-docker.sh
+sh get-docker.sh
+
+# Add ubuntu user to docker group
+usermod -aG docker ubuntu
+
+# Install Docker Compose plugin
+apt-get install -y docker-compose-plugin
+
+# Start Docker service
+systemctl enable docker
+systemctl start docker
+
+# Create project directory
+mkdir -p /home/ubuntu/football-tournament
+chown ubuntu:ubuntu /home/ubuntu/football-tournament
